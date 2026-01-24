@@ -1,0 +1,7 @@
+[package]
+name = "voxels_core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Add shared logic dependencies here (e.g., serde, anyhow)

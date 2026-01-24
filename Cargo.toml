@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "core",
+    "python_bindings",
+    "java_bindings",
+]
+resolver = "2"

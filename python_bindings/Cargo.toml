@@ -1,0 +1,12 @@
+[package]
+name = "voxels_python"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "voxels_python"
+crate-type = ["cdylib"]
+
+[dependencies]
+voxels_core = { path = "../core" }
+pyo3 = { version = "0.27.2", features = ["extension-module"] }

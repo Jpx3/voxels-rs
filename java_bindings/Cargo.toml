@@ -1,0 +1,13 @@
+[package]
+name = "voxels_java"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "voxels_java"
+crate-type = ["cdylib"]
+
+[dependencies]
+voxels_core = { path = "../core" }
+robusta_jni = "0.2"
+jni = "0.21"
