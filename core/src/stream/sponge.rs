@@ -103,13 +103,11 @@ mod tests {
     use flate2::read::GzDecoder;
 
     #[test]
-    fn test_mojang_schematic_input_stream() {
+    fn test_sponge_schematic_input_stream() {
         let file = File::open("C:\\Users\\strun\\RustroverProjects\\voxels-rs\\test_data\\sponge3-v2.schem").expect("Failed to open schematic file");
         let reader = BufReader::new(file);
         let gz_decoder = GzDecoder::new(reader);
         let mut schematic_stream = SpongeSchematicInputStream::new(gz_decoder);
-
-
         let mut buffer: [Block; 4096] = std::array::from_fn(|_| Block::air());
         let length = buffer.len();
         match schematic_stream.read(&mut buffer, 0, length) {

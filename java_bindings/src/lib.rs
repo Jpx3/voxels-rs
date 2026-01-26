@@ -65,8 +65,7 @@ mod jni {
         pub extern "jni" fn read<'env>(
             env: &JNIEnv,
             _blocks_array: JObject<'env>,
-            offset: i32,
-            length: i32,
+            offset: i32, length: i32,
         ) -> JniResult<i32> {
             println!(
                 "BlockInputStream read called with offset: {}, length: {}",
