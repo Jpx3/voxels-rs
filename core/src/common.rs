@@ -1,12 +1,18 @@
 use crate::store::blockstore::BlockStore;
 use std::string::ToString;
 
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum Axis {
     X,
     Y,
     Z,
 }
 
+/// The order in which axes are iterated or indexed.
+/// For example, `XYZ` means X is the outermost axis, then Y, then Z is the innermost axis.
+/// So in `XYZ` order, X changes the slowest, and Z changes the fastest.
+
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum AxisOrder {
     XYZ,
     XZY,
@@ -16,6 +22,7 @@ pub enum AxisOrder {
     ZYX,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Boundary {
     min_x: i32,
     min_y: i32,
@@ -46,6 +53,11 @@ pub struct Block {
 
 pub struct Schematic {
     block_store: dyn BlockStore,
+}
+
+pub trait Region {
+    fn contains(&self, pos: &BlockPosition) -> bool;
+    fn iter(&self, axis_order: AxisOrder) -> Box<dyn Iterator<Item = BlockPosition> + '_>;
 }
 
 impl Axis {
@@ -161,6 +173,14 @@ impl Boundary {
         self.min_z
     }
 
+    fn select_min(&self, axis: &Axis) -> i32 {
+        match axis {
+            Axis::X => self.min_x,
+            Axis::Y => self.min_y,
+            Axis::Z => self.min_z,
+        }
+    }
+
     fn max_x(&self) -> i32 {
         self.min_x + self.d_x - 1
     }
@@ -173,6 +193,14 @@ impl Boundary {
         self.min_z + self.d_z - 1
     }
 
+    fn select_max(&self, axis: &Axis) -> i32 {
+        match axis {
+            Axis::X => self.max_x(),
+            Axis::Y => self.max_y(),
+            Axis::Z => self.max_z(),
+        }
+    }
+
     pub(crate) fn d_x(&self) -> i32 {
         self.d_x
     }
@@ -183,6 +211,14 @@ impl Boundary {
 
     pub(crate) fn d_z(&self) -> i32 {
         self.d_z
+    }
+
+    fn select_size(&self, axis: &Axis) -> i32 {
+        match axis {
+            Axis::X => self.d_x,
+            Axis::Y => self.d_y,
+            Axis::Z => self.d_z,
+        }
     }
 
     pub fn contains(&self, pos: &BlockPosition) -> bool {
@@ -236,6 +272,22 @@ impl BlockPosition {
             Axis::X => self.x,
             Axis::Y => self.y,
             Axis::Z => self.z,
+        }
+    }
+
+    fn select_mut(&mut self, axis: &Axis) -> &mut i32 {
+        match axis {
+            Axis::X => &mut self.x,
+            Axis::Y => &mut self.y,
+            Axis::Z => &mut self.z,
+        }
+    }
+
+    fn select_set(&mut self, axis: &Axis, value: i32) {
+        match axis {
+            Axis::X => self.x = value,
+            Axis::Y => self.y = value,
+            Axis::Z => self.z = value,
         }
     }
 
@@ -402,6 +454,60 @@ impl Block {
             self.state.to_string(),
             self.position.to_string()
         )
+    }
+}
+
+
+impl Region for Boundary {
+    fn contains(&self, pos: &BlockPosition) -> bool {
+        self.contains(pos)
+    }
+
+    fn iter(&self, axis_order: AxisOrder) -> Box<dyn Iterator<Item = BlockPosition> + '_> {
+        Box::new(BoundaryIterator {
+            boundary: self,
+            axis_order,
+            current: BlockPosition::new(self.min_x, self.min_y, self.min_z),
+            done: false,
+        })
+    }
+}
+
+struct BoundaryIterator<'a> {
+    boundary: &'a Boundary,
+    axis_order: AxisOrder,
+    current: BlockPosition,
+    done: bool,
+}
+
+
+impl Iterator for BoundaryIterator<'_> {
+    type Item = BlockPosition;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.done {
+            return None;
+        }
+        let result = self.current;
+        let axis_vectors = self.axis_order.axis();
+        // last since we will reverse the literal axis order
+        let last_axis = axis_vectors.first().unwrap();
+        //                          ----------vvvv------- here!
+        for axis in axis_vectors.iter().rev() {
+            let next = self.current.select(axis) + 1;
+            let limit = self.boundary.select_max(axis);
+            if next > limit {
+                if axis == last_axis {
+                    self.done = true;
+                    break;
+                }
+                self.current.select_set(axis, self.boundary.select_min(axis));
+            } else {
+                self.current.select_set(axis, next);
+                break;
+            }
+        }
+        Some(result)
     }
 }
 

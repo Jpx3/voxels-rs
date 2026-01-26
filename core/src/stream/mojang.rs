@@ -87,11 +87,20 @@ impl<R: std::io::Read> SchematicInputStream for MojangSchematicInputStream<R> {
                             Value::ByteArray(_, _) => {
                                 println!("Big array read, returning data...");
                             }
-                            Value::List(name, typus, num) => {
+                            Value::List(ref name, typus, num) => {
                                 if let (Some(name), Tag::Int, 3) = (name, typus, num) {
                                     if name == "Size" {
                                         let (x, y, z) = poll_size(&mut self.parser)?;
                                         println!("Schematic size: {}x{}x{}", x, y, z);
+                                    }
+                                } else if let (Some(name), Tag::Compound) = (name, typus) {
+                                    if name == "palette" {
+                                        // we have the palette, which means we can stream the blocks
+                                        // as we are reading the stream
+                                    } else if name == "blocks" {
+                                        // we have the blocks but not the palette yet, which means we need to
+                                        // read all blocks into a temporary buffer first
+                                        
                                     }
                                 }
                             }
@@ -114,6 +123,15 @@ impl<R: std::io::Read> SchematicInputStream for MojangSchematicInputStream<R> {
                 }
             }
         }
+        
+        if (self._early_palette.is_some()) {
+            // we have the palette, so we can stream blocks directly
+        } else if let Some(_lazy_palette_block_keep) = &self._lazy_palette_block_keep {
+            // we have the blocks buffered, so we can now build the palette and stream blocks
+            
+        }
+        // 
+        
         Ok(None)
     }
 }
