@@ -1,33 +1,5 @@
 use crate::common::AxisOrder;
-
-pub trait Page {
-    fn load(&self, x: i32, y: i32, z: i32) -> Option<usize>;
-
-    fn store(&mut self, x: i32, y: i32, z: i32, state: usize) -> Result<(), String>;
-
-    fn erase(&mut self, x: i32, y: i32, z: i32) -> Result<(), String>;
-
-    fn nnz(&self) -> usize;
-
-    fn deep_equals(&self, other: &dyn Page) -> bool {
-        if self.nnz() != other.nnz() {
-            return false;
-        }
-        // Note: This is a naive implementation and may not be efficient for large pages.
-        for x in 0.. {
-            for y in 0.. {
-                for z in 0.. {
-                    let self_value = self.load(x, y, z);
-                    let other_value = other.load(x, y, z);
-                    if self_value != other_value {
-                        return false;
-                    }
-                }
-            }
-        }
-        true
-    }
-}
+use crate::store::paging::Page;
 
 pub struct ArrayPage {
     size_x: usize, size_y: usize, size_z: usize,
@@ -37,7 +9,7 @@ pub struct ArrayPage {
 }
 
 impl ArrayPage {
-    pub(crate) fn new(size_x: usize, size_y: usize, size_z: usize, axis_order: AxisOrder) -> Self {
+    pub(crate) fn new(size_x: usize, size_y: usize, size_z: usize, axis_order: AxisOrder) -> ArrayPage {
         let data = vec![0; size_x * size_y * size_z];
         ArrayPage {
             size_x, size_y, size_z,

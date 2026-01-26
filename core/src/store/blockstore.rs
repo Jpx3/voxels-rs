@@ -1,6 +1,7 @@
+use crate::common::{AxisOrder, Block, BlockPosition, BlockState, Boundary};
+use crate::store::paging::arraypage::ArrayPage;
+use crate::store::paging::Page;
 use std::collections::HashMap;
-use crate::common::{Axis, AxisOrder, Block, BlockPosition, BlockState, Boundary};
-use crate::store::paging::{ArrayPage, Page};
 
 pub trait BlockStore {
     fn block_at(&self, pos: &BlockPosition) -> Result<Option<&BlockState>, String>;
@@ -17,13 +18,17 @@ pub trait BlockStore {
         }
         Ok(())
     }
-    
+
     fn _expand_or_throw(&mut self, pos: &BlockPosition) -> Result<(), String> {
         let contains = self.boundary().contains(&pos);
         if !self.resizable() && !contains {
             return Err("Position out of bounds and store is not resizable".to_string());
         } else if !contains {
-            self.set_boundary(self.boundary().expand_to_include(&pos));
+            let new_boundary = self.boundary().expand_to_include(&pos);
+            if new_boundary.d_x() > 1024 || new_boundary.d_y() > 1024 || new_boundary.d_z() > 1024 {
+                return Err("Cannot expand boundary beyond 1024 in any dimension".to_string());
+            }
+            self.set_boundary(new_boundary);
         }
         Ok(())
     }
@@ -116,7 +121,7 @@ impl PagedBlockStore {
             n.next_power_of_two()
         }
     }
-    
+
     pub fn empty_resizable() -> Self {
         PagedBlockStore::new(Boundary::new(0, 0, 0, 0, 0, 0), 16, 16, 16, false)
     }
@@ -231,6 +236,71 @@ impl BlockStore for PagedBlockStore {
     }
 }
 
+pub struct LazyPaletteBlockStoreWrapper {
+    inner: Box<dyn BlockStore>,
+    temp_palette: HashMap<isize, BlockState>,
+    actual_palette: Option<HashMap<isize, BlockState>>,
+}
+
+fn temp_state_from_temp_id(
+    temp_palette: &mut HashMap<isize, BlockState>, id: isize
+) -> &BlockState {
+    if !temp_palette.contains_key(&id) {
+        let unknown_state = BlockState::new(
+            "unknown".to_string(),
+            vec![("id".to_string(), id.to_string())],
+        );
+        temp_palette.insert(id, unknown_state);
+    }
+    temp_palette.get(&id).unwrap()
+}
+
+impl LazyPaletteBlockStoreWrapper {
+    pub fn empty_resizable() -> Self {
+        LazyPaletteBlockStoreWrapper::from(Box::new(PagedBlockStore::empty_resizable()))
+    }
+    
+    pub fn from(inner: Box<dyn BlockStore>) -> Self {
+        LazyPaletteBlockStoreWrapper {
+            inner,
+            temp_palette: HashMap::new(),
+            actual_palette: None,
+        }
+    }
+
+    fn block_at(&mut self, pos: &BlockPosition) -> Result<Option<&BlockState>, String> {
+        match self.actual_palette {
+            None => Err("Can not access blocks if palette is not provided".to_string()),
+            Some(ref palette) => {
+                if let Some(state) = self.inner.block_at(pos)? {
+                    let id_str = &state.properties[0].1;
+                    let id: isize = id_str.parse().map_err(|_| "Invalid temporary ID".to_string())?;
+                    if let Some(actual_state) = palette.get(&id) {
+                        Ok(Some(actual_state))
+                    } else {
+                        Err("Temporary ID not found in actual palette".to_string())
+                    }
+                } else {
+                    Ok(None)
+                }
+            }
+        }
+    }
+
+    fn set_unknown_block(&mut self, pos: &BlockPosition, id: isize) -> Result<(), String> {
+        let state = temp_state_from_temp_id(&mut self.temp_palette, id);
+        self.inner.set_block_at(pos, state)
+    }
+    
+    fn remove_block_at(&mut self, pos: BlockPosition) -> Result<(), String> {
+        self.inner.remove_block_at(pos)
+    }
+    
+    fn set_actual_palette(&mut self, palette: HashMap<isize, BlockState>) {
+        self.actual_palette = Some(palette);
+    }
+}
+
 // testing time
 #[cfg(test)]
 mod tests {
@@ -242,7 +312,7 @@ mod tests {
         let boundary = Boundary::new(0, 0, 0, 10, 10, 10);
         let mut store = SparseBlockStore::new(boundary, false);
         let pos = BlockPosition { x: 1, y: 1, z: 1 };
-        let state = BlockState::from_str("stone".to_string());
+        let state = BlockState::from_str("stone".to_string()).unwrap();
         store.set_block_at(&pos, &state).unwrap();
         let retrieved = store.block_at(&pos).unwrap().unwrap();
         assert_eq!(retrieved, &state);
@@ -255,15 +325,34 @@ mod tests {
     fn test_paged_block_store() {
         let boundary = Boundary::new(0, 0, 0, 32, 32, 32);
         let mut store = PagedBlockStore::from_boundary(boundary, true);
-        
         let pos = BlockPosition { x: 5, y: 5, z: 5 };
-        let state = BlockState::from_str("dirt".to_string());
-        
+        let state = BlockState::from_str("dirt".to_string()).unwrap();
         store.set_block_at(&pos, &state).expect("Failed to set block");
         let retrieved = store.block_at(&pos).unwrap().unwrap();
         assert_eq!(retrieved, &state);
         store.remove_block_at(pos.clone()).unwrap();
         let retrieved = store.block_at(&pos).unwrap();
+        assert!(retrieved.is_none());
+    }
+    
+    #[test]
+    fn test_lazy_palette_block_store() {
+        let boundary = Boundary::new(0, 0, 0, 10, 10, 10);
+        let inner_store = Box::new(SparseBlockStore::new(boundary, false));
+        let mut lazy_store = LazyPaletteBlockStoreWrapper::from(inner_store);
+        
+        let pos = BlockPosition { x: 2, y: 2, z: 2 };
+        lazy_store.set_unknown_block(&pos, 1).unwrap();
+        
+        let mut actual_palette = HashMap::new();
+        actual_palette.insert(1, BlockState::from_str("grass".to_string()).unwrap());
+        lazy_store.set_actual_palette(actual_palette);
+        
+        let retrieved = lazy_store.block_at(&pos).unwrap().unwrap();
+        assert_eq!(retrieved, &BlockState::from_str("grass".to_string()).unwrap());
+        
+        lazy_store.remove_block_at(pos.clone()).unwrap();
+        let retrieved = lazy_store.block_at(&pos).unwrap();
         assert!(retrieved.is_none());
     }
 }

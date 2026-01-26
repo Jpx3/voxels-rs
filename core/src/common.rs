@@ -35,7 +35,7 @@ pub struct BlockPosition {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BlockState {
     name: String,
-    properties: Vec<(String, String)>,
+    pub(crate) properties: Vec<(String, String)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -131,31 +131,6 @@ impl Boundary {
             d_x: max_x - min_x + 1,
             d_y: max_y - min_y + 1,
             d_z: max_z - min_z + 1,
-        }
-    }
-
-    fn new_from_dict(dimensions: &std::collections::HashMap<String, i32>) -> Self {
-        let has_max = dimensions.contains_key("max_x")
-            && dimensions.contains_key("max_y")
-            && dimensions.contains_key("max_z");
-        if has_max {
-            Boundary::new_from_min_max(
-                *dimensions.get("min_x").unwrap(),
-                *dimensions.get("min_y").unwrap(),
-                *dimensions.get("min_z").unwrap(),
-                *dimensions.get("max_x").unwrap(),
-                *dimensions.get("max_y").unwrap(),
-                *dimensions.get("max_z").unwrap(),
-            )
-        } else {
-            Boundary::new(
-                *dimensions.get("min_x").unwrap(),
-                *dimensions.get("min_y").unwrap(),
-                *dimensions.get("min_z").unwrap(),
-                *dimensions.get("d_x").unwrap(),
-                *dimensions.get("d_y").unwrap(),
-                *dimensions.get("d_z").unwrap(),
-            )
         }
     }
 
@@ -324,12 +299,32 @@ impl BlockState {
         }
     }
 
-    pub(crate) fn from_str(input: String) -> BlockState {
+    pub(crate) fn from_str(input: String) -> Result<BlockState, String> {
         if !input.contains("[") {
-            return BlockState::from_name(input.trim().to_string());
+            if input.contains("]") {
+                return Err("Malformed BlockState string: missing '['".to_string());
+            }
+            if input.trim().is_empty() {
+                return Err("Malformed BlockState string: empty input".to_string());
+            }
+            return Ok(BlockState::from_name(input.trim().to_string()));
         }
         let split_index = input.find("[").unwrap();
         let type_name = &input[0..split_index];
+        let raw_type_name = if let Some(stripped) = type_name.strip_prefix("minecraft:") {
+            stripped.trim()
+        } else {
+            return Err(format!(
+                "Malformed BlockState string: '{}' must start with 'minecraft:'",
+                type_name
+            ));
+        };
+        if !raw_type_name.chars().all(|c| matches!(c, 'a'..='z' | '0'..='9' | '_' | '/' | ':')) {
+            return Err(format!(
+                "Malformed BlockState string: illegal character in path '{}'",
+                raw_type_name
+            ));
+        }
         let type_properties_string = &input[split_index + 1..];
         let property_map = if type_properties_string == "]" {
             vec![]
@@ -347,7 +342,24 @@ impl BlockState {
                 })
                 .collect()
         };
-        BlockState::new(type_name.trim().to_string(), property_map)
+        for (k, v) in &property_map {
+            if k.is_empty() || v.is_empty() {
+                return Err("Malformed BlockState string: empty property key or value".to_string());
+            }
+            if !k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '+' || c == '-') {
+                return Err(format!(
+                    "Malformed BlockState string: illegal character in property key '{}'",
+                    k
+                ));
+            }
+            if !v.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '+' || c == '-') {
+                return Err(format!(
+                    "Malformed BlockState string: illegal character in property value '{}'",
+                    v
+                ));
+            }
+        }
+        Ok(BlockState::new(type_name.trim().to_string(), property_map))
     }
 
     fn to_json(&self) -> String {
@@ -397,8 +409,8 @@ impl Block {
 mod tests {
     #[test]
     fn test_block_state_parsing() {
-        let state_str = "minecraft:stone [variant= granite , hardness=1.5]";
-        let block_state = super::BlockState::from_str(state_str.to_string());
+        let state_str = "minecraft:stone [variant= granite , hardness=1]";
+        let block_state = super::BlockState::from_str(state_str.to_string()).unwrap();
         assert_eq!(block_state.name, "minecraft:stone");
         assert_eq!(block_state.properties.len(), 2);
         assert_eq!(
@@ -407,7 +419,14 @@ mod tests {
         );
         assert_eq!(
             block_state.properties[1],
-            ("hardness".to_string(), "1.5".to_string())
+            ("hardness".to_string(), "1".to_string())
         );
+    }
+
+    #[test]
+    fn test_illegal_block_state_parsing() {
+        let state_str = "minecraft:stone variant=granite]";
+        let result = super::BlockState::from_str(state_str.to_string());
+        assert!(result.is_err());
     }
 }
