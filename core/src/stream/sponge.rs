@@ -1,8 +1,8 @@
-use std::collections::HashMap;
-use fastnbt::stream::{Parser, Value};
-use crate::common::{Block, BlockState, Boundary, Schematic};
-use crate::store::blockstore::{BlockStore, PagedBlockStore};
+use crate::common::{Block, BlockState};
+use crate::store::blockstore::BlockStore;
 use crate::stream::SchematicInputStream;
+use fastnbt::stream::{Parser, Value};
+use std::collections::HashMap;
 
 pub struct SpongeSchematicInputStream<R: std::io::Read> {
     parser: Parser<R>,
@@ -98,9 +98,9 @@ impl<R: std::io::Read> SchematicInputStream for SpongeSchematicInputStream<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use flate2::read::GzDecoder;
     use std::fs::File;
     use std::io::BufReader;
-    use flate2::read::GzDecoder;
 
     #[test]
     fn test_sponge_schematic_input_stream() {
