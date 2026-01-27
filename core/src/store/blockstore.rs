@@ -290,6 +290,13 @@ impl LazyPaletteBlockStoreWrapper {
         LazyPaletteBlockStoreWrapper::from(Box::new(PagedBlockStore::empty_resizable()))
     }
 
+    pub fn empty_resizable_from_size(
+        size_x: usize, size_y: usize, size_z: usize
+    ) -> Self {
+        let boundary = Boundary::new(0, 0, 0, size_x as i32, size_y as i32, size_z as i32);
+        LazyPaletteBlockStoreWrapper::from(Box::new(PagedBlockStore::from_boundary(boundary, false)))
+    }
+
     pub fn from(inner: Box<dyn BlockStore>) -> Self {
         LazyPaletteBlockStoreWrapper {
             inner,
@@ -298,7 +305,7 @@ impl LazyPaletteBlockStoreWrapper {
         }
     }
 
-    fn block_at(&mut self, pos: &BlockPosition) -> Result<Option<&BlockState>, String> {
+    pub fn block_at(&self, pos: &BlockPosition) -> Result<Option<&BlockState>, String> {
         match self.actual_palette {
             None => Err("Can not access blocks if palette is not provided".to_string()),
             Some(ref palette) => {
@@ -317,16 +324,22 @@ impl LazyPaletteBlockStoreWrapper {
         }
     }
 
-    fn set_unknown_block(&mut self, pos: &BlockPosition, id: isize) -> Result<(), String> {
+    pub fn set_unknown_block(&mut self, pos: &BlockPosition, id: isize) -> Result<(), String> {
         let state = temp_state_from_temp_id(&mut self.temp_palette, id);
         self.inner.set_block_at(pos, state)
     }
+    
+    pub fn set_unknown_block_at(&mut self, x: i32, y: i32, z: i32, state: isize) -> Result<(), String> {
+        let pos = BlockPosition { x, y, z };
+        let block_state = temp_state_from_temp_id(&mut self.temp_palette, state);
+        self.inner.set_block_at(&pos, block_state)
+    }
 
-    fn remove_block_at(&mut self, pos: BlockPosition) -> Result<(), String> {
+    pub fn remove_block_at(&mut self, pos: BlockPosition) -> Result<(), String> {
         self.inner.remove_block_at(pos)
     }
 
-    fn set_actual_palette(&mut self, palette: HashMap<isize, BlockState>) {
+    pub fn set_actual_palette(&mut self, palette: HashMap<isize, BlockState>) {
         self.actual_palette = Some(palette);
     }
 }

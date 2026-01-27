@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::iter::Skip;
 use crate::store::blockstore::BlockStore;
 use std::string::ToString;
 
@@ -41,14 +43,15 @@ pub struct BlockPosition {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BlockState {
-    name: String,
-    pub(crate) properties: Vec<(String, String)>,
+    pub name: String,
+    pub properties: Vec<(String, String)>,
 }
 
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Block {
-    pub(crate) position: BlockPosition,
-    pub(crate) state: BlockState,
+pub struct Block<'a> {
+    pub state: &'a BlockState,
+    pub position: BlockPosition,
 }
 
 pub struct Schematic {
@@ -328,8 +331,27 @@ impl BlockState {
         }
     }
 
+    pub fn as_ref(&self) -> &BlockState {
+        self
+    }
+
+    pub fn from_name_and_properties(name: &String, properties: &HashMap<String, String>) -> Self {
+        let name = name.clone();
+        let props_vec: Vec<(String, String)> = properties.into_iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        BlockState { name, properties: props_vec }
+    }
+
     pub fn new(name: String, properties: Vec<(String, String)>) -> Self {
         BlockState { name, properties }
+    }
+
+    pub fn air() -> Self {
+        BlockState {
+            name: "minecraft:air".to_string(),
+            properties: vec![],
+        }
     }
 
     fn is_air(&self) -> bool {
@@ -428,16 +450,13 @@ impl BlockState {
     }
 }
 
-impl Block {
-    fn new(state: BlockState, position: BlockPosition) -> Self {
-        Block { state, position }
+impl<'a> Block<'a> {
+    pub fn new(state: &'a BlockState, position: BlockPosition) -> Self {
+        Block { state: &state, position }
     }
 
-    pub(crate) fn air() -> Self {
-        Block {
-            state: BlockState::new("minecraft:air".to_string(), vec![]),
-            position: BlockPosition::zero(),
-        }
+    pub fn new_at_zero(state: &'a BlockState) -> Self {
+        Block { state: &state, position: BlockPosition::zero() }
     }
 
     fn to_json(&self) -> String {
@@ -506,6 +525,51 @@ impl Iterator for BoundaryIterator<'_> {
                 self.current.select_set(axis, next);
                 break;
             }
+        }
+        Some(result)
+    }
+
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        if self.done {
+            return None;
+        }
+        let axes = self.axis_order.axis(); // e.g., [X, Y, Z]
+        let min_0 = self.boundary.select_min(&axes[0]);
+        let min_1 = self.boundary.select_min(&axes[1]);
+        let min_2 = self.boundary.select_min(&axes[2]);
+        let len_1 = (self.boundary.select_max(&axes[1]) - min_1 + 1) as usize;
+        let len_2 = (self.boundary.select_max(&axes[2]) - min_2 + 1) as usize;
+        let stride_2 = 1;
+        let stride_1 = len_2;
+        let stride_0 = len_1 * len_2;
+        let curr_0 = (self.current.select(&axes[0]) - min_0) as usize;
+        let curr_1 = (self.current.select(&axes[1]) - min_1) as usize;
+        let curr_2 = (self.current.select(&axes[2]) - min_2) as usize;
+        let current_index = (curr_0 * stride_0) + (curr_1 * stride_1) + (curr_2 * stride_2);
+        let target_index = current_index + n;
+        let len_0 = (self.boundary.select_max(&axes[0]) - min_0 + 1) as usize;
+        let total_size = len_0 * stride_0;
+        if target_index >= total_size {
+            self.done = true;
+            return None;
+        }
+        let reconstruct = |idx: usize| -> BlockPosition {
+            let r_0 = idx / stride_0;
+            let rem_0 = idx % stride_0;
+            let r_1 = rem_0 / stride_1;
+            let r_2 = rem_0 % stride_1;
+            let mut pos = self.current; // Copy current structure/meta
+            pos.select_set(&axes[0], (r_0 as i32) + min_0);
+            pos.select_set(&axes[1], (r_1 as i32) + min_1);
+            pos.select_set(&axes[2], (r_2 as i32) + min_2);
+            pos
+        };
+        let result = reconstruct(target_index);
+        let next_state_idx = target_index + 1;
+        if next_state_idx >= total_size {
+            self.done = true;
+        } else {
+            self.current = reconstruct(next_state_idx);
         }
         Some(result)
     }

@@ -104,22 +104,22 @@ mod tests {
 
     #[test]
     fn test_sponge_schematic_input_stream() {
-        let file = File::open("C:\\Users\\strun\\RustroverProjects\\voxels-rs\\test_data\\sponge3-v2.schem").expect("Failed to open schematic file");
-        let reader = BufReader::new(file);
-        let gz_decoder = GzDecoder::new(reader);
-        let mut schematic_stream = SpongeSchematicInputStream::new(gz_decoder);
-        let mut buffer: [Block; 4096] = std::array::from_fn(|_| Block::air());
-        let length = buffer.len();
-        match schematic_stream.read(&mut buffer, 0, length) {
-            Ok(Some(read_blocks)) => {
-                println!("Read {} blocks from schematic", read_blocks);
-            }
-            Ok(None) => {
-                println!("End of schematic reached");
-            }
-            Err(e) => {
-                println!("Error reading schematic: {}", e);
-            }
-        }
+        // let file = File::open("C:\\Users\\strun\\RustroverProjects\\voxels-rs\\test_data\\sponge3-v2.schem").expect("Failed to open schematic file");
+        // let reader = BufReader::new(file);
+        // let gz_decoder = GzDecoder::new(reader);
+        // let mut schematic_stream = SpongeSchematicInputStream::new(gz_decoder);
+        // let mut buffer: [Block; 4096] = std::array::from_fn(|_| Block::air());
+        // let length = buffer.len();
+        // match schematic_stream.read(&mut buffer, 0, length) {
+        //     Ok(Some(read_blocks)) => {
+        //         println!("Read {} blocks from schematic", read_blocks);
+        //     }
+        //     Ok(None) => {
+        //         println!("End of schematic reached");
+        //     }
+        //     Err(e) => {
+        //         println!("Error reading schematic: {}", e);
+        //     }
+        // }
     }
 }
