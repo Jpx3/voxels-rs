@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::iter::Skip;
 use crate::store::blockstore::BlockStore;
 use std::string::ToString;
+use std::sync::OnceLock;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum Axis {
@@ -46,7 +47,6 @@ pub struct BlockState {
     pub name: String,
     pub properties: Vec<(String, String)>,
 }
-
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Block<'a> {
@@ -323,6 +323,9 @@ impl BlockPosition {
     }
 }
 
+
+static AIR: OnceLock<BlockState> = OnceLock::new();
+
 impl BlockState {
     fn from_name(name: String) -> Self {
         BlockState {
@@ -347,6 +350,10 @@ impl BlockState {
         BlockState { name, properties }
     }
 
+    pub fn air_state_ref<'a>() -> &'a BlockState {
+        AIR.get_or_init(|| BlockState::air())
+    }
+
     pub fn air() -> Self {
         BlockState {
             name: "minecraft:air".to_string(),
@@ -354,7 +361,7 @@ impl BlockState {
         }
     }
 
-    fn is_air(&self) -> bool {
+    pub(crate) fn is_air(&self) -> bool {
         self.name == "minecraft:air"
             || self.name == "minecraft:cave_air"
             || self.name == "minecraft:void_air"

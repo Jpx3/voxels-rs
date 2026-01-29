@@ -19,6 +19,15 @@ pub trait BlockStore : Region {
         Ok(())
     }
 
+    fn iterate_blocks(&self, axis_order: AxisOrder) -> Box<dyn Iterator<Item=(BlockPosition, Option<&BlockState>)> + '_> {
+        Box::new(self.iter(axis_order).map(move |pos| {
+            let state = self.block_at(&pos).unwrap_or(None);
+            (pos, state)
+        }).filter(move |(_pos, state)| {
+            state.is_some() && !state.unwrap().is_air()
+        }))
+    }
+
     fn _expand_or_throw(&mut self, pos: &BlockPosition) -> Result<(), String> {
         let contains = self.boundary().contains(&pos);
         if !self.resizable() && !contains {
@@ -328,7 +337,7 @@ impl LazyPaletteBlockStoreWrapper {
         let state = temp_state_from_temp_id(&mut self.temp_palette, id);
         self.inner.set_block_at(pos, state)
     }
-    
+
     pub fn set_unknown_block_at(&mut self, x: i32, y: i32, z: i32, state: isize) -> Result<(), String> {
         let pos = BlockPosition { x, y, z };
         let block_state = temp_state_from_temp_id(&mut self.temp_palette, state);

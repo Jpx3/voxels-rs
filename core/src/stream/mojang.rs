@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::io::Write;
 use fastnbt::stream::{Error, ErrorKind, Parser, Value};
 use fastnbt::Tag;
 use crate::common::{AxisOrder, Block, BlockPosition, BlockState, Boundary, Region, Schematic};
@@ -50,14 +51,18 @@ fn poll_size(
                             "Width" => x = Some(val as usize),
                             "Height" => y = Some(val as usize),
                             "Length" => z = Some(val as usize),
-                            _ => {}
+                            _ => {
+                                return Err(format!("Unexpected size entry name: {}", name));
+                            }
                         }
                     } else if seen < 3 {
                         match seen {
                             0 => x = Some(val as usize),
                             1 => y = Some(val as usize),
                             2 => z = Some(val as usize),
-                            _ => {}
+                            _ => {
+                                return Err("Too many unnamed size entries in schematic".to_string());
+                            }
                         }
                     }
                     seen += 1;
@@ -85,39 +90,45 @@ fn poll_size(
 }
 
 impl<R: std::io::Read> SchematicInputStream for MojangSchematicInputStream<R> {
-    fn read<'a>(&'a mut self, buffer: &mut [Block<'a>], offset: usize, length: usize) -> Result<Option<usize>, String> {
+    fn read<'a>(&'a mut self, buffer: &mut Vec<Block<'a>>, offset: usize, length: usize) -> Result<Option<usize>, String> {
         if !self.header_read {
             self.header_read = true;
-            self.read_schematic_header().expect("Failed to read header");
+
+            match self.read_schematic_header() {
+                Ok(_) => {}
+                Err(e) => {
+                    return Err(format!("Error reading schematic header: {}", e));
+                }
+            }
         }
-
         if let Some(wrapper) = &self.lazy_palette.blocks {
-            // Create the iterator on the fly, skip to the current progress
-            let iter = wrapper.iter(AxisOrder::XYZ).skip(self.lazy_palette.current_index);
-
+            let iter = wrapper
+                .iter(AxisOrder::XYZ)
+                .skip(self.lazy_palette.current_index);
             let mut read_blocks = 0;
             for (i, block_pos) in iter.enumerate() {
                 if i >= length { break; }
-                let block_state = wrapper.block_at(
-                    &block_pos
-                )?;
+                let block_state = wrapper.block_at(&block_pos)?;
                 match block_state {
                     Some(state) => {
-                        buffer[offset + i] = Block::new(&state, block_pos);
+                        // buffer[offset + i] = Block::new(&state, block_pos);
+                        buffer.push(Block::new(&state, block_pos));
                     }
                     None => {
-                        // buffer[offset + i] = Block::new(&BlockState::air(), block_pos);
+                        // buffer[offset + i] = Block::new(&BlockState::air_state_ref(), block_pos);
+                        buffer.push(Block::new(&BlockState::air_state_ref(), block_pos));
                     }
                 }
-
+                // println!("Read block at {:?} with state {:?}", block_pos, block_state);
                 read_blocks += 1;
             }
-
+            if read_blocks == 0 {
+                return Ok(None); // No more blocks to read
+            }
             self.lazy_palette.current_index += read_blocks;
             return Ok(Some(read_blocks));
         }
-
-        Ok(Some(0))
+        Ok(None)
     }
 }
 
@@ -128,16 +139,17 @@ impl<R: std::io::Read> MojangSchematicInputStream<R> {
                 Ok(value) => {
                     match value {
                         Value::ByteArray(_, _) => {
-                            println!("Big array read, returning data...");
+                            Err("Unexpected ByteArray".to_string())?;
                         }
                         Value::List(ref name, typus, num) => {
                             if let (Some(name), Tag::Int, 3) = (name, typus, num) {
-                                if name == "Size" {
+                                if name.eq_ignore_ascii_case("Size") {
                                     let (x, y, z) = poll_size(&mut self.parser)?;
-                                    println!("Schematic size: {}x{}x{}", x, y, z);
                                     self.size_x = x;
                                     self.size_y = y;
                                     self.size_z = z;
+                                } else {
+                                    Err(format!("Unexpected list name: {}", name))?;
                                 }
                             } else if let (Some(name), Tag::Compound) = (name, typus) {
                                 if self.lazy_palette.blocks.is_none() {
@@ -149,10 +161,12 @@ impl<R: std::io::Read> MojangSchematicInputStream<R> {
                                         ));
                                 }
                                 if name == "palette" {
-                                    self.extract_palette_from_nbt_stream()?;
+                                    let option = &self.lazy_palette.blocks;
+                                    if let Some(wrapper) = option {
+                                        self.extract_palette_from_nbt_stream()?;
+                                    }
                                 } else if name == "blocks" {
-                                    let block_count = self.read_blocks_from_nbt_stream()?;
-                                    println!("Read {} blocks from schematic", block_count);
+                                    self.read_blocks_from_nbt_stream()?;
                                 }
                             }
                         }
@@ -160,19 +174,21 @@ impl<R: std::io::Read> MojangSchematicInputStream<R> {
                     }
                 }
                 Err(e) => {
-                    return Err(format!("Error reading NBT: {}", e));
+                    return if e.is_eof() {
+                        Ok(())
+                    } else {
+                        Err(format!("Error reading NBT: {}", e))
+                    }
                 }
             }
         }
     }
 
     fn extract_palette_from_nbt_stream(&mut self) -> Result<(), String> {
-        // let
         let mut palette: HashMap<isize, BlockState> = HashMap::new();
         palette.insert(
             0, BlockState::air()
         );
-
         let mut type_name = String::new();
         let mut properties = HashMap::<String, String>::new();
         let mut depth = 1;
@@ -213,8 +229,8 @@ impl<R: std::io::Read> MojangSchematicInputStream<R> {
                                 let block_state = BlockState::from_name_and_properties(&type_name, &properties);
                                 let index = palette.len() as isize;
                                 palette.insert(index, block_state);
-                                print!("Palette entry: {} with properties {:?}\n", type_name, properties);
-                                print!("Assigned index {}\n", index);
+                                // print!("Palette entry: {} with properties {:?}\n", type_name, properties);
+                                // print!("Assigned index {}\n", index);
                                 properties.clear();
                             }
                             if depth == 0 {
@@ -225,7 +241,8 @@ impl<R: std::io::Read> MojangSchematicInputStream<R> {
                             break
                         }
                         _ => {
-                            print!("Unexpected palette NBT value: {:?}\n", value);
+                            // print!("Unexpected palette NBT value: {:?}\n", value);
+                            Err("Unexpected palette NBT value".to_string())?;
                             break;
                         }
                     }
@@ -234,6 +251,10 @@ impl<R: std::io::Read> MojangSchematicInputStream<R> {
                     Err(format!("Error reading NBT in palette: {}", e))?;
                 }
             }
+        }
+        let palette1 = &mut self.lazy_palette;
+        if let Some(wrapper) = &mut palette1.blocks {
+            wrapper.set_actual_palette(palette);
         }
         Ok(())
     }
@@ -281,13 +302,17 @@ impl<R: std::io::Read> MojangSchematicInputStream<R> {
                                 current_index = 0;
                                 if let Some(wrapper) = &mut self.lazy_palette.blocks {
                                     wrapper.set_unknown_block_at(x as i32, y as i32, z as i32, val as isize)?;
-                                    print!("Set block at ({}, {}, {}) to state {}\n", x, y, z, val);
+                                    // print!("Set block at ({}, {}, {}) to state {}\n", x, y, z, val);
+                                } else {
+                                    Err("Palette not initialized when reading blocks".to_string())?;
                                 }
                             } else {
                                 Err(format!("Unexpected int name in block: {}", name))?;
                             }
                         }
-                        _ => {}
+                        _ => {
+                            // Err(format!("Unexpected NBT value in blocks: {:?}", value))?;
+                        }
                     }
                 }
                 Err(e) => {
@@ -312,19 +337,10 @@ mod tests {
         let reader = BufReader::new(file);
         let mut gz_decoder = GzDecoder::new(reader);
         let mut schematic_stream = MojangSchematicInputStream::new(&mut gz_decoder);
-        let air = BlockState::air();
-        let mut buffer: [Block; 4096] = std::array::from_fn(|_| Block::new_at_zero(&air));
-        let length = buffer.len();
-        match schematic_stream.read(&mut buffer, 0, length) {
-            Ok(Some(read_blocks)) => {
-                println!("Read {} blocks from schematic", read_blocks);
-            }
-            Ok(None) => {
-                println!("End of schematic reached");
-            }
-            Err(e) => {
-                println!("Error reading schematic: {}", e);
-            }
+        let mut block_store = PagedBlockStore::empty_resizable();
+        schematic_stream.read_to_end(&mut block_store).expect("Failed to read schematic to end");
+        for x in block_store.iterate_blocks(AxisOrder::XYZ) {
+            println!("Block at position {:?} has state {:?}", x.0, x.1);
         }
     }
 }

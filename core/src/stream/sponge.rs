@@ -46,7 +46,7 @@ pub fn poll_palette_from_parser<R: std::io::Read>(
 }
 
 impl<R: std::io::Read> SchematicInputStream for SpongeSchematicInputStream<R> {
-    fn read(&mut self, buffer: &mut [Block], offset: usize, length: usize) -> Result<Option<usize>, String> {
+    fn read(&mut self, buffer: &mut Vec<Block>, offset: usize, length: usize) -> Result<Option<usize>, String> {
         let mut indent = 0;
 
         loop {

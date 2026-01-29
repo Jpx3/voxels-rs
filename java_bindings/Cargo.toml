@@ -11,3 +11,4 @@ crate-type = ["cdylib"]
 voxels_core = { path = "../core" }
 robusta_jni = "0.2"
 jni = "0.21"
+flate2="1.1.8"
