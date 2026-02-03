@@ -11,6 +11,8 @@ public class BlockInputStream implements AutoCloseable {
 
   public native int read(Block[] blocks, int offset, int length);
 
+  public native Boundary boundary();
+
   @Override
   public synchronized native void close();
   

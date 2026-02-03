@@ -1,10 +1,9 @@
 pub mod mojang_reader;
 pub mod mojang_writer;
+pub mod vxl_writer;
 mod nbt_reader;
-mod sponge;
 
-
-use crate::common::{AxisOrder, Block};
+use crate::common::{AxisOrder, Block, Boundary};
 use crate::store::blockstore::BlockStore;
 
 pub trait SchematicInputStream {
@@ -22,10 +21,12 @@ pub trait SchematicInputStream {
         }
         Ok(())
     }
+    
+    fn boundary(&mut self) -> Result<Option<Boundary>, String>;
 }
 
 /*
-    Don't forget to call complete() after write_all() or write() to finalize the stream.
+    Please don't forget to call complete() after write_all() or write() to finalize the stream.
  */
 pub trait SchematicOutputStream {
     fn write(&mut self, blocks: &[Block]) -> Result<usize, String>;

@@ -121,12 +121,8 @@ impl AxisOrder {
 impl Boundary {
     pub fn new(min_x: i32, min_y: i32, min_z: i32, d_x: i32, d_y: i32, d_z: i32) -> Self {
         Boundary {
-            min_x,
-            min_y,
-            min_z,
-            d_x,
-            d_y,
-            d_z,
+            min_x, min_y, min_z,
+            d_x, d_y, d_z,
         }
     }
 
@@ -187,15 +183,15 @@ impl Boundary {
         }
     }
 
-    fn max_x(&self) -> i32 {
+    pub(crate) fn max_x(&self) -> i32 {
         self.min_x + self.d_x - 1
     }
 
-    fn max_y(&self) -> i32 {
+    pub(crate) fn max_y(&self) -> i32 {
         self.min_y + self.d_y - 1
     }
 
-    fn max_z(&self) -> i32 {
+    pub(crate) fn max_z(&self) -> i32 {
         self.min_z + self.d_z - 1
     }
 
@@ -259,12 +255,8 @@ impl Boundary {
         let new_max_y = self.max_y().max(pos.y);
         let new_max_z = self.max_z().max(pos.z);
         Boundary::new_from_min_max(
-            new_min_x,
-            new_min_y,
-            new_min_z,
-            new_max_x,
-            new_max_y,
-            new_max_z,
+            new_min_x, new_min_y, new_min_z,
+            new_max_x, new_max_y, new_max_z,
         )
     }
 
@@ -411,6 +403,79 @@ impl BlockState {
                 .collect();
             format!("{}[{}]", self.name, props.join(","))
         }
+    }
+
+    pub fn update(&self, difference: &String) -> Result<Self, String> {
+        let mut new_type_name = self.name.clone();
+        let mut new_properties: HashMap<String, String> = self
+            .properties
+            .iter()
+            .cloned()
+            .collect();
+        if difference.trim().is_empty() {
+            return Ok(self.clone());
+        }
+        for part in difference.split("(?=[+-])") {
+            let op = part.chars().next().unwrap_or('\0');
+            if op == '+' {
+                for pair in part[1..].split(",") {
+                    let kv: Vec<&str> = pair.splitn(2, '=').collect();
+                    if kv.len() == 2 {
+                        new_properties.insert(kv[0].to_string(), kv[1].to_string());
+                    }  else {
+                        return Err(format!("Malformed property addition: '{}'", pair));
+                    }
+                }
+            } else if op == '-' {
+                for key in part[1..].split(",") {
+                    new_properties.remove(key);
+                }
+            } else if !part.is_empty() {
+                new_type_name = part.to_string();
+            }
+        }
+        Ok(BlockState::from_name_and_properties(&new_type_name, &new_properties))
+    }
+
+    pub fn difference(&self, other: &BlockState) -> String {
+        let mut sb = String::new();
+        if self.name != other.name {
+            sb.push_str(&other.name);
+        }
+        let updates: Vec<String> = other
+            .properties
+            .iter()
+            .filter(|(k, v)| {
+                self.properties
+                    .iter()
+                    .find(|(sk, sv)| *sk == *k)
+                    .map_or(true, |(_, sv)| *sv != *v)
+            })
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect();
+        let removals: Vec<String> = self
+            .properties
+            .iter()
+            .filter(|(k, _)| !other.properties.iter().any(|(ok, _)| *ok == *k))
+            .map(|(k, _)| k.clone())
+            .collect();
+        if !updates.is_empty() {
+            if !sb.is_empty() {
+                sb.push('+');
+            } else {
+                sb.push('+');
+            }
+            sb.push_str(&updates.join(","));
+        }
+        if !removals.is_empty() {
+            if !sb.is_empty() {
+                sb.push('-');
+            } else {
+                sb.push('-');
+            }
+            sb.push_str(&removals.join(","));
+        }
+        sb
     }
 
     pub fn name(&self) -> String {
@@ -595,48 +660,48 @@ impl Iterator for BoundaryIterator<'_> {
         }
         Some(result)
     }
-
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
         if self.done {
             return None;
         }
-        let axes = self.axis_order.axis(); // e.g., [X, Y, Z]
-        let min_0 = self.boundary.select_min(&axes[0]);
-        let min_1 = self.boundary.select_min(&axes[1]);
-        let min_2 = self.boundary.select_min(&axes[2]);
-        let len_1 = (self.boundary.select_max(&axes[1]) - min_1 + 1) as usize;
-        let len_2 = (self.boundary.select_max(&axes[2]) - min_2 + 1) as usize;
-        let stride_2 = 1;
-        let stride_1 = len_2;
-        let stride_0 = len_1 * len_2;
-        let curr_0 = (self.current.select(&axes[0]) - min_0) as usize;
-        let curr_1 = (self.current.select(&axes[1]) - min_1) as usize;
-        let curr_2 = (self.current.select(&axes[2]) - min_2) as usize;
-        let current_index = (curr_0 * stride_0) + (curr_1 * stride_1) + (curr_2 * stride_2);
+        let axes = self.axis_order.axis();
+        let dims = axes.len();
+        let mut lengths = vec![0usize; dims];
+        let mut mins = vec![0i32; dims];
+        for i in 0..dims {
+            mins[i] = self.boundary.select_min(&axes[i]);
+            lengths[i] = (self.boundary.select_max(&axes[i]) - mins[i] + 1) as usize;
+        }
+        let mut strides = vec![1usize; dims];
+        for i in (0..dims - 1).rev() {
+            strides[i] = strides[i + 1] * lengths[i + 1];
+        }
+        let total_size = strides[0] * lengths[0];
+        let mut current_index = 0usize;
+        for i in 0..dims {
+            let val = (self.current.select(&axes[i]) - mins[i]) as usize;
+            current_index += val * strides[i];
+        }
         let target_index = current_index + n;
-        let len_0 = (self.boundary.select_max(&axes[0]) - min_0 + 1) as usize;
-        let total_size = len_0 * stride_0;
         if target_index >= total_size {
             self.done = true;
             return None;
         }
         let reconstruct = |idx: usize| -> BlockPosition {
-            let r_0 = idx / stride_0;
-            let rem_0 = idx % stride_0;
-            let r_1 = rem_0 / stride_1;
-            let r_2 = rem_0 % stride_1;
-            let mut pos = self.current; // Copy current structure/meta
-            pos.select_set(&axes[0], (r_0 as i32) + min_0);
-            pos.select_set(&axes[1], (r_1 as i32) + min_1);
-            pos.select_set(&axes[2], (r_2 as i32) + min_2);
+            let mut pos = self.current;
+            let mut running_idx = idx;
+            for i in 0..dims {
+                let coord = running_idx / strides[i];
+                pos.select_set(&axes[i], (coord as i32) + mins[i]);
+                running_idx %= strides[i];
+            }
             pos
         };
         let result = reconstruct(target_index);
-        let next_state_idx = target_index + 1;
-        if next_state_idx >= total_size {
+        if target_index + 1 >= total_size {
             self.done = true;
         } else {
-            self.current = reconstruct(next_state_idx);
+            self.current = reconstruct(target_index + 1);
         }
         Some(result)
     }

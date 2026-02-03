@@ -11,7 +11,6 @@ use robusta_jni::jni::objects::{AutoLocal, JObject};
 use robusta_jni::jni::JNIEnv;
 use voxels_core::common::{Block, BlockPosition, BlockState, Boundary};
 use voxels_core::stream::{SchematicInputStream, SchematicOutputStream};
-use crate::jni::BlockInputStream;
 
 pub struct BlockInputStreamHandle {
     pub sis: Box<dyn SchematicInputStream>,
@@ -153,9 +152,10 @@ mod jni {
     use flate2::Compression;
     use robusta_jni::convert::Field;
     use robusta_jni::jni::sys::jlong;
-    use voxels_core::common::Block;
+    use voxels_core::common::{AxisOrder, Block};
     use voxels_core::stream::mojang_reader::MojangSchematicInputStream;
     use voxels_core::stream::mojang_writer::MojangSchematicOutputStream;
+    use voxels_core::stream::vxl_writer::VXLSchematicOutputStream;
     use crate::javastreams::{JavaInputStream, JavaOutputStream};
     use super::*;
 
@@ -223,14 +223,27 @@ mod jni {
             }
             let schematic_type_str_obj = env.call_method(schematic_type, "name", "()Ljava/lang/String;", &[])?.l()?;
             let schematic_type_str: String = env.get_string(schematic_type_str_obj.into())?.into();
-            let stream = JavaOutputStream::new(
-                env, output_stream
-            )?;
-
+            let stream = JavaOutputStream::new(env, output_stream)?;
+            let boundary_r = if !boundary.is_null() {
+                Some(JNITranslation::from_jni(env, boundary)?)
+            } else {
+                None
+            };
             use flate2::write::GzEncoder;
-            let sis = match schematic_type_str.as_str() {
+            let sis: Box<dyn SchematicOutputStream> = match schematic_type_str.as_str() {
                 "MOJANG" => {
-                    MojangSchematicOutputStream::new(GzEncoder::new(stream, Compression::default()),)
+                    Box::new(MojangSchematicOutputStream::new(GzEncoder::new(stream, Compression::default())))
+                },
+                "VXL" => {
+                    if boundary_r.is_none() {
+                        env.throw_new("java/lang/IllegalArgumentException", "Boundary must be provided for VXL schematic type")?;
+                        return Ok(JObject::null());
+                    }
+                    Box::new(VXLSchematicOutputStream::new(
+                        GzEncoder::new(stream, Compression::default()),
+                        AxisOrder::XYZ,
+                        boundary_r.unwrap()
+                    ))
                 },
                 _ => {
                     env.throw_new("java/lang/IllegalArgumentException", "Unknown schematic type")?;
@@ -239,7 +252,7 @@ mod jni {
             };
             let boxedHandle = Box::new(
                 BlockOutputStreamHandle {
-                    sos: Box::new(sis),
+                    sos: sis,
                     jni_cache: JniCache::init(env)?
                 }
             );
@@ -333,6 +346,30 @@ mod jni {
                 Err(e) => {
                     env.throw_new("java/io/IOException", format!("Error reading blocks: {}", e))?;
                     Ok(-1)
+                }
+            }
+        }
+
+        pub extern "jni" fn boundary(
+            self, env: &JNIEnv<'env>,
+        ) -> JniResult<JObject<'env>> {
+            let ptr_value = self.ptr.get()?;
+            if ptr_value == 0 {
+                env.throw_new("java/io/IOException", "Stream is closed")?;
+                return Ok(JObject::null());
+            }
+            let ptr = ptr_value as *mut BlockInputStreamHandle;
+            let handle = unsafe { &mut *ptr };
+            match handle.sis.boundary() {
+                Ok(Some(boundary)) => {
+                    Ok(boundary.to_jni(env)?)
+                }
+                Ok(None) => {
+                    Ok(JObject::null())
+                }
+                Err(e) => {
+                    env.throw_new("java/io/IOException", format!("Error getting boundary: {}", e))?;
+                    Ok(JObject::null())
                 }
             }
         }
@@ -530,6 +567,38 @@ trait JNITranslation {
     fn from_jni<'env>(env: &JNIEnv<'env>, obj: JObject<'env>) -> JniResult<Self>
     where
         Self: Sized;
+}
+
+impl JNITranslation for Boundary {
+    fn to_jni<'env>(&self, env: &JNIEnv<'env>) -> JniResult<JObject<'env>> {
+        let class = env.find_class("de/richy/voxels/Boundary")?;
+        let obj = env.new_object(
+            class,
+            "(IIIIII)V",
+            &[
+                self.min_x.into(),
+                self.min_y.into(),
+                self.min_z.into(),
+                self.d_x.into(),
+                self.d_y.into(),
+                self.d_z.into(),
+            ],
+        )?;
+        Ok(obj)
+    }
+
+    fn from_jni<'env>(env: &JNIEnv<'env>, obj: JObject<'env>) -> JniResult<Self> {
+        let min_x = env.get_field(obj, "minX", "I")?.i()?;
+        let min_y = env.get_field(obj, "minY", "I")?.i()?;
+        let min_z = env.get_field(obj, "minZ", "I")?.i()?;
+        let d_x = env.get_field(obj, "dX", "I")?.i()?;
+        let d_y = env.get_field(obj, "dY", "I")?.i()?;
+        let d_z = env.get_field(obj, "dZ", "I")?.i()?;
+        Ok(Boundary {
+            min_x, min_y, min_z,
+            d_x, d_y, d_z,
+        })
+    }
 }
 
 impl JNITranslation for BlockPosition {

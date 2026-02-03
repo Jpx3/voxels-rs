@@ -24,8 +24,6 @@ impl<W: std::io::Write> MojangSchematicOutputStream<W> {
     }
 }
 
-/// Internal structures for Serde to map Rust objects to the specific NBT structure
-/// required by the Minecraft Structure Block format.
 #[derive(Serialize)]
 struct StructureData {
     #[serde(rename = "DataVersion")]

@@ -380,6 +380,38 @@ mod tests {
     }
 
     #[test]
+    fn test_region_iter_different_sizes() {
+        let boundary = Boundary::new(0, 0, 0, 3, 2, 1);
+        let positions: Vec<BlockPosition> = boundary.iter(AxisOrder::XYZ).skip(2).collect();
+        let expected_positions = vec![
+            // BlockPosition { x: 0, y: 0, z: 0 },
+            // BlockPosition { x: 0, y: 1, z: 0 },
+            BlockPosition { x: 1, y: 0, z: 0 },
+            BlockPosition { x: 1, y: 1, z: 0 },
+            BlockPosition { x: 2, y: 0, z: 0 },
+            BlockPosition { x: 2, y: 1, z: 0 },
+        ];
+        assert_eq!(positions, expected_positions);
+    }
+
+    #[test]
+    fn test_region_iter_different_sizes_2() {
+        let boundary = Boundary::new(0, 0, 0, 1, 3, 2);
+        let positions: Vec<BlockPosition> = boundary.iter(AxisOrder::XYZ).skip(3).collect();
+        let expected_positions = vec![
+            // BlockPosition { x: 0, y: 0, z: 0 },
+            // BlockPosition { x: 0, y: 0, z: 1 },
+            // BlockPosition { x: 0, y: 1, z: 0 },
+            BlockPosition { x: 0, y: 1, z: 1 },
+            BlockPosition { x: 0, y: 2, z: 0 },
+            BlockPosition { x: 0, y: 2, z: 1 },
+        ];
+        assert_eq!(positions, expected_positions);
+    }
+
+
+
+    #[test]
     fn test_sparse_block_store() {
         let boundary = Boundary::new(0, 0, 0, 10, 10, 10);
         let mut store = SparseBlockStore::new(boundary, false);

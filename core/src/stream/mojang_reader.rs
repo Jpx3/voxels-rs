@@ -1,4 +1,4 @@
-use crate::common::{AxisOrder, Block, BlockState, Region};
+use crate::common::{AxisOrder, Block, BlockState, Boundary, Region};
 use crate::store::blockstore::BlockStore;
 use crate::store::blockstore::LazyPaletteBlockStoreWrapper;
 use crate::store::blockstore::PagedBlockStore;
@@ -95,7 +95,6 @@ impl<R: std::io::Read> SchematicInputStream for MojangSchematicInputStream<R> {
     fn read(&mut self, buffer: &mut Vec<Block>, _offset: usize, length: usize) -> Result<Option<usize>, String> {
         if !self.header_read {
             self.header_read = true;
-
             match self.read_schematic_header() {
                 Ok(_) => {}
                 Err(e) => {
@@ -108,16 +107,20 @@ impl<R: std::io::Read> SchematicInputStream for MojangSchematicInputStream<R> {
                 .iter(AxisOrder::XYZ)
                 .skip(self.lazy_palette.current_index);
             let mut read_blocks = 0;
-            for (i, block_pos) in iter.enumerate() {
-                if i >= length { break; }
+            let mut written_blocks = 0;
+            for (_, block_pos) in iter.enumerate() {
+                if written_blocks >= length { break; }
                 let block_state = wrapper.block_at(&block_pos)?;
+
                 match block_state {
                     Some(state) => {
                         buffer.push(Block::new(state, block_pos));
+                        written_blocks += 1;
                     }
                     None => {
                         // buffer[offset + i] = Block::new(&BlockState::air_state_ref(), block_pos);
-                        buffer.push(Block::new(BlockState::air_arc(), block_pos));
+                        // buffer.push(Block::new(BlockState::air_arc(), block_pos));
+                        // written_blocks += 1;
                     }
                 }
                 read_blocks += 1;
@@ -126,9 +129,31 @@ impl<R: std::io::Read> SchematicInputStream for MojangSchematicInputStream<R> {
                 return Ok(None);
             }
             self.lazy_palette.current_index += read_blocks;
-            return Ok(Some(read_blocks));
+            return Ok(Some(written_blocks));
         }
         Ok(None)
+    }
+
+    fn boundary(&mut self) -> Result<Option<Boundary>, String> {
+        if !self.header_read {
+            self.header_read = true;
+            match self.read_schematic_header() {
+                Ok(_) => {}
+                Err(e) => {
+                    return Err(format!("Error reading schematic header: {}", e));
+                }
+            }
+        }
+        if self.size_x > 0 && self.size_y > 0 && self.size_z > 0 {
+            Ok(Some(Boundary::new(
+                0,0, 0,
+                self.size_x as i32,
+                self.size_y as i32,
+                self.size_z as i32
+            )))
+        } else {
+            Ok(None)
+        }
     }
 }
 
@@ -155,10 +180,9 @@ impl<R: std::io::Read> MojangSchematicInputStream<R> {
                                 if self.lazy_palette.blocks.is_none() {
                                     self.lazy_palette.blocks = Some(
                                         LazyPaletteBlockStoreWrapper::empty_resizable_from_size(
-                                            self.size_x.max(16),
-                                            self.size_y.max(16),
-                                            self.size_z.max(16)
-                                        ));
+                                            self.size_x, self.size_y, self.size_z
+                                        )
+                                    );
                                 }
                                 if name == "palette" {
                                     self.extract_palette_from_nbt_stream()?;
@@ -334,11 +358,16 @@ mod tests {
         let mut schematic_stream = MojangSchematicInputStream::new(&mut gz_decoder);
         let mut block_store = PagedBlockStore::empty_resizable();
         schematic_stream.read_to_end(&mut block_store).expect("Failed to read schematic to end");
+        let boundary = Boundary::new(0, 0, 0, 52, 11, 52);
         let mut non_air_blocks = 0;
         for x in block_store.iterate_blocks(AxisOrder::XYZ) {
             if !x.1.clone().or_else(|| Some(BlockState::air_arc())).unwrap().is_air() {
                 println!("Block at position {:?} with state {:?}", x.0, x.1);
                 non_air_blocks += 1;
+            }
+
+            if !boundary.contains(&x.0) {
+                panic!("Block position {:?} out of boundary {:?}", x.0, boundary);
             }
         }
         println!("Total non-air blocks: {}", non_air_blocks);

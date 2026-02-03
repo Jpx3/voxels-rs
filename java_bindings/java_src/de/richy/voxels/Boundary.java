@@ -78,4 +78,14 @@ public record Boundary(
         ", dZ=" + dZ +
         '}';
   }
+  
+  public static Boundary fromMinAndMax(
+    int minX, int minY, int minZ,
+    int maxX, int maxY, int maxZ
+  ) {
+    return new Boundary(
+      minX, minY, minZ,
+      maxX - minX, maxY - minY, maxZ - minZ
+    );
+  }
 }
