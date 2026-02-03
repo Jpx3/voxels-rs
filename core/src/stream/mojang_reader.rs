@@ -1,11 +1,12 @@
-use std::collections::HashMap;
-use std::io::Write;
-use std::sync::Arc;
-use fastnbt::stream::{Error, ErrorKind, Parser, Value};
-use fastnbt::Tag;
-use crate::common::{AxisOrder, Block, BlockPosition, BlockState, Boundary, Region, Schematic};
-use crate::store::blockstore::{BlockStore, LazyPaletteBlockStoreWrapper, PagedBlockStore};
+use crate::common::{AxisOrder, Block, BlockState, Region};
+use crate::store::blockstore::BlockStore;
+use crate::store::blockstore::LazyPaletteBlockStoreWrapper;
+use crate::store::blockstore::PagedBlockStore;
 use crate::stream::SchematicInputStream;
+use fastnbt::stream::{Parser, Value};
+use fastnbt::Tag;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 pub struct MojangSchematicInputStream<R: std::io::Read> {
     parser: Parser<R>,
@@ -91,7 +92,7 @@ fn poll_size(
 }
 
 impl<R: std::io::Read> SchematicInputStream for MojangSchematicInputStream<R> {
-    fn read(&mut self, buffer: &mut Vec<Block>, offset: usize, length: usize) -> Result<Option<usize>, String> {
+    fn read(&mut self, buffer: &mut Vec<Block>, _offset: usize, length: usize) -> Result<Option<usize>, String> {
         if !self.header_read {
             self.header_read = true;
 
@@ -160,10 +161,7 @@ impl<R: std::io::Read> MojangSchematicInputStream<R> {
                                         ));
                                 }
                                 if name == "palette" {
-                                    let option = &self.lazy_palette.blocks;
-                                    if let Some(wrapper) = option {
-                                        self.extract_palette_from_nbt_stream()?;
-                                    }
+                                    self.extract_palette_from_nbt_stream()?;
                                 } else if name == "blocks" {
                                     self.read_blocks_from_nbt_stream()?;
                                 }
@@ -215,7 +213,7 @@ impl<R: std::io::Read> MojangSchematicInputStream<R> {
                             }
                         }
                         Value::Compound(Some(name)) => {
-                            if (name == "Properties") {
+                            if name == "Properties" {
                                 depth += 1;
                             }
                         }
@@ -324,9 +322,9 @@ impl<R: std::io::Read> MojangSchematicInputStream<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use flate2::read::GzDecoder;
     use std::fs::File;
     use std::io::BufReader;
-    use flate2::read::GzDecoder;
 
     #[test]
     fn test_mojang_schematic_input_stream() {

@@ -94,6 +94,27 @@ impl JniCache {
         Ok(state.clone())
     }
 
+    pub fn block_position_java_to_rust(
+        &mut self, env: &JNIEnv,
+        jposition: JObject
+    ) -> JniResult<BlockPosition> {
+        let x = env.get_field_unchecked(
+            jposition,
+            self.pos_x_field,
+            "I".parse()?
+        )?.i()?;
+        let y = env.get_field_unchecked(
+            jposition,
+            self.pos_y_field,
+            "I".parse()?
+        )?.i()?;
+        let z = env.get_field_unchecked(
+            jposition,
+            self.pos_z_field,
+            "I".parse()?)?.i()?;
+        Ok(BlockPosition { x, y, z })
+    }
+
     pub fn block_from_java(
         &mut self, env: &JNIEnv,
         java_block: JObject
@@ -108,7 +129,7 @@ impl JniCache {
             self.block_state_field,
             "Lde/richy/voxels/BlockState;".parse()?
         )?.l()?;
-        let position = BlockPosition::from_jni(env, jposition)?;
+        let position = self.block_position_java_to_rust(env, jposition)?;
         let state = self.block_state_java_to_rust(env, jstate)?;
         Ok(Block::new(state, position))
     }
@@ -318,7 +339,7 @@ mod jni {
 
         pub extern "jni" fn close(mut self) -> JniResult<()> {
             let ptr_value = self.ptr.get()?;
-            println!("BlockInputStream close called, ptr value: {}", ptr_value);
+            // println!("BlockInputStream close called, ptr value: {}", ptr_value);
             if ptr_value == 0 {
                 return Ok(());
             }
@@ -379,7 +400,6 @@ mod jni {
                     let state_ref = handle.jni_cache.block_from_java(env, java_block)?;
                     state_ref.clone()
                 };
-
                 blocks.push(block);
             }
             match handle.sos.write(&*blocks) {
@@ -395,7 +415,7 @@ mod jni {
             mut self, env: &JNIEnv
         ) -> JniResult<()> {
             let ptr_value = self.ptr.get()?;
-            println!("BlockOutputStream close called, ptr value: {}", ptr_value);
+            // println!("BlockOutputStream close called, ptr value: {}", ptr_value);
             if ptr_value == 0 {
                 return Ok(());
             }
@@ -404,19 +424,13 @@ mod jni {
             unsafe {
                 let mut raw = Box::from_raw(ptr);
                 let write_result = raw.sos.complete();
-                match write_result {
-                    Ok(_) => {
-                        println!("BlockOutputStream successfully completed.");
-                    },
-                    Err(e) => {
-                        env.throw_new("java/io/IOException", format!("Error completing output stream: {}", e))?;
-                    }
+                if let Err(e) = write_result {
+                    env.throw_new("java/io/IOException", format!("Error completing output stream: {}", e))?;
                 }
             }
             Ok(())
         }
     }
-
 
     #[derive(Signature, TryIntoJavaValue, TryFromJavaValue, FromJavaValue)]
     #[package(de.richy.voxels)]
@@ -510,7 +524,6 @@ mod jni {
     }
 }
 
-
 trait JNITranslation {
     fn to_jni<'env>(&self, env: &JNIEnv<'env>) -> JniResult<JObject<'env>>;
 
@@ -518,7 +531,6 @@ trait JNITranslation {
     where
         Self: Sized;
 }
-
 
 impl JNITranslation for BlockPosition {
     fn to_jni<'env>(&self, env: &JNIEnv<'env>) -> JniResult<JObject<'env>> {

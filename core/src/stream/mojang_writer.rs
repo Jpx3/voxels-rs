@@ -1,8 +1,8 @@
-use crate::common::{AxisOrder, Block, BlockState, Boundary, Region};
+use crate::common::{Block, BlockState, Boundary};
+use crate::stream::SchematicOutputStream;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
-use crate::stream::SchematicOutputStream;
 
 pub struct MojangSchematicOutputStream<W: std::io::Write> {
     writer: W,
@@ -60,9 +60,6 @@ struct BlockEntry {
 
 impl<W: std::io::Write> SchematicOutputStream for MojangSchematicOutputStream<W> {
     fn write(&mut self, blocks: &[Block]) -> Result<usize, String> {
-        if self.palette_map.is_empty() {
-            self.palette_map.insert(BlockState::air_arc(), 0);
-        }
         let mut block_count = 0;
         for block in blocks {
             let block_state = block.state.clone();
@@ -71,7 +68,6 @@ impl<W: std::io::Write> SchematicOutputStream for MojangSchematicOutputStream<W>
             }
             let block_position = block.position;
             self.boundary = self.boundary.expand_to_include(&block_position);
-            
             let state_index = if let Some(&idx) = self.palette_map.get(block_state.as_ref()) {
                 idx
             } else {

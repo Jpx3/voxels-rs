@@ -29,12 +29,12 @@ public class TestAll {
             Block[] buffer = new Block[512];
             int read;
             while ((read = bis.read(buffer)) != -1) {
-                for (int i = 0; i < read; i++) {
-                    Block b = buffer[i];
-                    if (b.position().x() == 0 && b.position().y() == 0 && b.position().z() == 0) {
-                        System.out.println("Block: " + b);
-                    }
-                }
+//                 for (int i = 0; i < read; i++) {
+//                     Block b = buffer[i];
+//                     if (b.position().x() == 0 && b.position().y() == 0 && b.position().z() == 0) {
+//                         System.out.println("Block: " + b);
+//                     }
+//                 }
                 bos.write(buffer, 0, read);
             }
             long end = System.currentTimeMillis();

@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-use std::iter::Skip;
 use crate::store::blockstore::BlockStore;
+use std::collections::HashMap;
 use std::string::ToString;
 use std::sync::{Arc, OnceLock};
 
@@ -250,7 +249,7 @@ impl Boundary {
     }
 
     pub fn expand_to_include(&self, pos: &BlockPosition) -> Boundary {
-        if (self.contains(pos)) {
+        if self.contains(pos) {
             return *self;
         }
         let new_min_x = self.min_x().min(pos.x);

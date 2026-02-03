@@ -4,7 +4,7 @@ mod nbt_reader;
 mod sponge;
 
 
-use crate::common::{AxisOrder, Block, BlockState};
+use crate::common::{AxisOrder, Block};
 use crate::store::blockstore::BlockStore;
 
 pub trait SchematicInputStream {

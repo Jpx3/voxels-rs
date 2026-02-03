@@ -6,7 +6,7 @@ import java.util.Map;
 import java.util.HashMap;
 
 public class BlockState {
-  public static long __ref_cnt = 0;
+  private static long __ref_cnt = 0;
   private final long __internal_id;
 
   private final String typeName;
