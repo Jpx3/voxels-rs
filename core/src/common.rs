@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::iter::Skip;
 use crate::store::blockstore::BlockStore;
 use std::string::ToString;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum Axis {
@@ -27,19 +27,12 @@ pub enum AxisOrder {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Boundary {
-    min_x: i32,
-    min_y: i32,
-    min_z: i32,
-    d_x: i32,
-    d_y: i32,
-    d_z: i32,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct BlockPosition {
-    pub x: i32,
-    pub y: i32,
-    pub z: i32,
+    pub min_x: i32,
+    pub min_y: i32,
+    pub min_z: i32,
+    pub d_x: i32,
+    pub d_y: i32,
+    pub d_z: i32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -49,8 +42,8 @@ pub struct BlockState {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Block<'a> {
-    pub state: &'a BlockState,
+pub struct Block {
+    pub state: Arc<BlockState>,
     pub position: BlockPosition,
 }
 
@@ -127,7 +120,7 @@ impl AxisOrder {
 }
 
 impl Boundary {
-    pub(crate) fn new(min_x: i32, min_y: i32, min_z: i32, d_x: i32, d_y: i32, d_z: i32) -> Self {
+    pub fn new(min_x: i32, min_y: i32, min_z: i32, d_x: i32, d_y: i32, d_z: i32) -> Self {
         Boundary {
             min_x,
             min_y,
@@ -135,6 +128,17 @@ impl Boundary {
             d_x,
             d_y,
             d_z,
+        }
+    }
+
+    pub fn new_empty() -> Self {
+        Boundary {
+            min_x: 0,
+            min_y: 0,
+            min_z: 0,
+            d_x: 0,
+            d_y: 0,
+            d_z: 0,
         }
     }
 
@@ -204,16 +208,28 @@ impl Boundary {
         }
     }
 
-    pub(crate) fn d_x(&self) -> i32 {
+    pub fn d_x(&self) -> i32 {
         self.d_x
     }
 
-    pub(crate) fn d_y(&self) -> i32 {
+    pub fn d_y(&self) -> i32 {
         self.d_y
     }
 
-    pub(crate) fn d_z(&self) -> i32 {
+    pub fn d_z(&self) -> i32 {
         self.d_z
+    }
+
+    pub fn size_as_array(&self) -> [i32; 3] {
+        [self.d_x, self.d_y, self.d_z]
+    }
+
+    pub fn size_as_i16_array(&self) -> [i16; 3] {
+        [self.d_x as i16, self.d_y as i16, self.d_z as i16]
+    }
+
+    pub fn size_as_vector(&self) -> Vec<i32> {
+        vec![self.d_x, self.d_y, self.d_z]
     }
 
     fn select_size(&self, axis: &Axis) -> i32 {
@@ -234,6 +250,9 @@ impl Boundary {
     }
 
     pub fn expand_to_include(&self, pos: &BlockPosition) -> Boundary {
+        if (self.contains(pos)) {
+            return *self;
+        }
         let new_min_x = self.min_x().min(pos.x);
         let new_min_y = self.min_y().min(pos.y);
         let new_min_z = self.min_z().min(pos.z);
@@ -265,9 +284,20 @@ impl Boundary {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct BlockPosition {
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+}
+
 impl BlockPosition {
     pub fn new(x: i32, y: i32, z: i32) -> Self {
         BlockPosition { x, y, z }
+    }
+
+    pub fn to_array(&self) -> [i32; 3] {
+        [self.x, self.y, self.z]
     }
 
     fn select(&self, axis: &Axis) -> i32 {
@@ -324,10 +354,10 @@ impl BlockPosition {
 }
 
 
-static AIR: OnceLock<BlockState> = OnceLock::new();
+static AIR: OnceLock<Arc<BlockState>> = OnceLock::new();
 
 impl BlockState {
-    fn from_name(name: String) -> Self {
+    pub fn from_name(name: String) -> Self {
         BlockState {
             name,
             properties: vec![],
@@ -351,7 +381,11 @@ impl BlockState {
     }
 
     pub fn air_state_ref<'a>() -> &'a BlockState {
-        AIR.get_or_init(|| BlockState::air())
+        AIR.get_or_init(|| Arc::new(BlockState::air())).as_ref()
+    }
+
+    pub fn air_arc() -> Arc<BlockState> {
+        AIR.get_or_init(|| Arc::new(BlockState::air())).clone()
     }
 
     pub fn air() -> Self {
@@ -361,13 +395,13 @@ impl BlockState {
         }
     }
 
-    pub(crate) fn is_air(&self) -> bool {
+    pub fn is_air(&self) -> bool {
         self.name == "minecraft:air"
             || self.name == "minecraft:cave_air"
             || self.name == "minecraft:void_air"
     }
 
-    fn to_string(&self) -> String {
+    pub fn to_string(&self) -> String {
         if self.properties.is_empty() {
             self.name.clone() + "[]"
         } else {
@@ -380,7 +414,29 @@ impl BlockState {
         }
     }
 
-    pub(crate) fn from_str(input: String) -> Result<BlockState, String> {
+    pub fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    pub fn properties(&self) -> Option<HashMap<String, String>> {
+        if self.properties.is_empty() {
+            return None;
+        }
+        let mut map = HashMap::new();
+        for (k, v) in &self.properties {
+            map.insert(k.clone(), v.clone());
+        }
+        Some(map)
+    }
+
+    pub fn clone(&self) -> Self {
+        BlockState {
+            name: self.name.clone(),
+            properties: self.properties.clone(),
+        }
+    }
+
+    pub fn from_str(input: String) -> Result<BlockState, String> {
         if !input.contains("[") {
             if input.contains("]") {
                 return Err("Malformed BlockState string: missing '['".to_string());
@@ -443,7 +499,7 @@ impl BlockState {
         Ok(BlockState::new(type_name.trim().to_string(), property_map))
     }
 
-    fn to_json(&self) -> String {
+    pub fn to_json(&self) -> String {
         let props: Vec<String> = self
             .properties
             .iter()
@@ -457,13 +513,18 @@ impl BlockState {
     }
 }
 
-impl<'a> Block<'a> {
-    pub fn new(state: &'a BlockState, position: BlockPosition) -> Self {
-        Block { state: &state, position }
+impl Block {
+    pub fn new(state: Arc<BlockState>, position: BlockPosition) -> Self {
+        Block {
+            state,
+            position
+        }
     }
 
-    pub fn new_at_zero(state: &'a BlockState) -> Self {
-        Block { state: &state, position: BlockPosition::zero() }
+    pub fn new_at_zero(state: Arc<BlockState>) -> Self {
+        Block {
+            state, position: BlockPosition::zero(),
+        }
     }
 
     fn to_json(&self) -> String {
@@ -584,6 +645,8 @@ impl Iterator for BoundaryIterator<'_> {
 
 #[cfg(test)]
 mod tests {
+    use crate::common::Region;
+
     #[test]
     fn test_block_state_parsing() {
         let state_str = "minecraft:stone [variant= granite , hardness=1]";
@@ -605,5 +668,23 @@ mod tests {
         let state_str = "minecraft:stone variant=granite]";
         let result = super::BlockState::from_str(state_str.to_string());
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_boundary_iterator() {
+        let boundary = super::Boundary::new(0, 0, 0, 2, 2, 2);
+        let iter = boundary.iter(super::AxisOrder::XYZ);
+        let mut iter2 = iter.skip(4);
+        let mut positions = vec![];
+        while let Some(pos) = iter2.next() {
+            positions.push((pos.x, pos.y, pos.z));
+        }
+        let expected_positions = vec![
+            // (0, 0, 0), (0, 0, 1),
+            // (0, 1, 0), (0, 1, 1),
+            (1, 0, 0), (1, 0, 1),
+            (1, 1, 0), (1, 1, 1),
+        ];
+        assert_eq!(positions, expected_positions);
     }
 }

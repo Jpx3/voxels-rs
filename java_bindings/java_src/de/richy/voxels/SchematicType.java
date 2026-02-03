@@ -1,26 +1,33 @@
 package de.richy.voxels;
 
 public enum SchematicType {
-    VXL("vxl"),
-    LITEMATIC("litematic"),
-    MCEDIT("mcedit"),
-    MOJANG("mojang"),
-    SPONGE_V1("sponge_v1"),
-    SPONGE_V2("sponge_v2"),
-    SPONGE_V3("sponge_v3");
-    ;
+  VXL("vxl", true),
+  LITEMATIC("litematic", true),
+  MCEDIT("mcedit", true),
+  MOJANG("mojang", false),
+  SPONGE_V1("sponge_v1", true),
+  SPONGE_V2("sponge_v2", true),
+  SPONGE_V3("sponge_v3", true),
+  UNKNOWN(null, false)
+  ;
 
-    private final String typeName;
+  private final String typeName;
+  private final boolean writerRequiresBoundary;
 
-    SchematicType(String typeName) {
-        this.typeName = typeName;
-    }
+  SchematicType(String typeName, boolean writerRequiresBoundary) {
+    this.typeName = typeName;
+    this.writerRequiresBoundary = writerRequiresBoundary;
+  }
 
-    public String typeName() {
-        return typeName;
-    }
+  public String typeName() {
+    return typeName;
+  }
+
+  public boolean writerRequiresBoundary() {
+    return writerRequiresBoundary;
+  }
 
 	static {
-	    Voxels.initialize();
-    }
+	  Voxels.initialize();
+  }
 }

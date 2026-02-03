@@ -2,10 +2,11 @@ use crate::common::{AxisOrder, Block, BlockPosition, BlockState, Boundary, Regio
 use crate::store::paging::arraypage::ArrayPage;
 use crate::store::paging::Page;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 pub trait BlockStore : Region {
-    fn block_at(&self, pos: &BlockPosition) -> Result<Option<&BlockState>, String>;
-    fn set_block_at(&mut self, pos: &BlockPosition, state: &BlockState) -> Result<(), String>;
+    fn block_at(&self, pos: &BlockPosition) -> Result<Option<Arc<BlockState>>, String>;
+    fn set_block_at(&mut self, pos: &BlockPosition, state: Arc<BlockState>) -> Result<(), String>;
     fn remove_block_at(&mut self, pos: BlockPosition) -> Result<(), String>;
     fn boundary(&self) -> &Boundary;
     fn set_boundary(&mut self, boundary: Boundary);
@@ -14,17 +15,17 @@ pub trait BlockStore : Region {
     fn insert(&mut self, blocks: &[Block], offset: usize, length: usize) -> Result<(), String> {
         for i in 0..length {
             let block = &blocks[offset + i];
-            self.set_block_at(&block.position, &block.state)?;
+            self.set_block_at(&block.position, block.state.clone())?;
         }
         Ok(())
     }
 
-    fn iterate_blocks(&self, axis_order: AxisOrder) -> Box<dyn Iterator<Item=(BlockPosition, Option<&BlockState>)> + '_> {
+    fn iterate_blocks(&self, axis_order: AxisOrder) -> Box<dyn Iterator<Item=(BlockPosition, Option<Arc<BlockState>>)> + '_> {
         Box::new(self.iter(axis_order).map(move |pos| {
             let state = self.block_at(&pos).unwrap_or(None);
             (pos, state)
         }).filter(move |(_pos, state)| {
-            state.is_some() && !state.unwrap().is_air()
+            state.is_some() && !state.as_ref().unwrap().is_air()
         }))
     }
 
@@ -45,8 +46,8 @@ pub trait BlockStore : Region {
 
 pub struct SparseBlockStore {
     data: HashMap<BlockPosition, usize>,
-    palette: Vec<BlockState>,
-    reverse_palette: HashMap<BlockState, usize>,
+    palette: Vec<Arc<BlockState>>,
+    reverse_palette: HashMap<Arc<BlockState>, usize>,
     boundary: Boundary,
     fixed_size: bool,
 }
@@ -62,8 +63,8 @@ impl SparseBlockStore {
         }
     }
 
-    fn get_or_add_palette_index(&mut self, state: &BlockState) -> usize {
-        if let Some(&index) = self.reverse_palette.get(state) {
+    fn get_or_add_palette_index(&mut self, state: Arc<BlockState>) -> usize {
+        if let Some(&index) = self.reverse_palette.get(&state) {
             index
         } else {
             let index = self.palette.len();
@@ -85,17 +86,18 @@ impl Region for SparseBlockStore {
 }
 
 impl BlockStore for SparseBlockStore {
-    fn block_at(&self, pos: &BlockPosition) -> Result<Option<&BlockState>, String> {
+    fn block_at(&self, pos: &BlockPosition) -> Result<Option<Arc<BlockState>>, String> {
         if !self.boundary().contains(&pos) {
             return Err("Position out of bounds".to_string());
         }
+
         match self.data.get(&pos) {
-            Some(&index) => Ok(self.palette.get(index)),
+            Some(&index) => Ok(self.palette.get(index).cloned()),
             None => Ok(None),
         }
     }
 
-    fn set_block_at(&mut self, pos: &BlockPosition, state: &BlockState) -> Result<(), String> {
+    fn set_block_at(&mut self, pos: &BlockPosition, state: Arc<BlockState>) -> Result<(), String> {
         self._expand_or_throw(pos)?;
         let index = self.get_or_add_palette_index(state);
         self.data.insert(pos.clone(), index);
@@ -123,8 +125,8 @@ impl BlockStore for SparseBlockStore {
 
 pub struct PagedBlockStore {
     pages: HashMap<i64, Box<dyn Page>>,
-    palette: Vec<BlockState>,
-    reverse_palette: HashMap<BlockState, usize>,
+    palette: Vec<Arc<BlockState>>,
+    reverse_palette: HashMap<Arc<BlockState>, usize>,
     page_size_x: usize, page_size_y: usize, page_size_z: usize,
     bits_x: u32, bits_y: u32, bits_z: u32,
     mask_x: u32, mask_y: u32, mask_z: u32,
@@ -171,8 +173,8 @@ impl PagedBlockStore {
         }
     }
 
-    fn get_or_add_palette_index(&mut self, state: &BlockState) -> usize {
-        if let Some(&index) = self.reverse_palette.get(state) {
+    fn get_or_add_palette_index(&mut self, state: Arc<BlockState>) -> usize {
+        if let Some(&index) = self.reverse_palette.get(state.as_ref()) {
             index
         } else {
             let index = self.palette.len();
@@ -194,7 +196,7 @@ impl Region for PagedBlockStore {
 }
 
 impl BlockStore for PagedBlockStore {
-    fn block_at(&self, pos: &BlockPosition) -> Result<Option<&BlockState>, String> {
+    fn block_at(&self, pos: &BlockPosition) -> Result<Option<Arc<BlockState>>, String> {
         if !self.boundary().contains(&pos) {
             return Err("Position out of bounds".to_string());
         }
@@ -207,7 +209,7 @@ impl BlockStore for PagedBlockStore {
             let local_y = (pos.y as u32) & self.mask_y;
             let local_z = (pos.z as u32) & self.mask_z;
             match page.load(local_x as i32, local_y as i32, local_z as i32) {
-                Some(index) => Ok(self.palette.get(index)),
+                Some(index) => Ok(self.palette.get(index).cloned()),
                 None => Ok(None),
             }
         } else {
@@ -215,7 +217,7 @@ impl BlockStore for PagedBlockStore {
         }
     }
 
-    fn set_block_at(&mut self, pos: &BlockPosition, state: &BlockState) -> Result<(), String> {
+    fn set_block_at(&mut self, pos: &BlockPosition, state: Arc<BlockState>) -> Result<(), String> {
         self._expand_or_throw(&pos)?;
         let page_x = (pos.x as u32) >> self.bits_x;
         let page_y = (pos.y as u32) >> self.bits_y;
@@ -267,21 +269,21 @@ impl BlockStore for PagedBlockStore {
 
 pub struct LazyPaletteBlockStoreWrapper {
     inner: Box<dyn BlockStore>,
-    temp_palette: HashMap<isize, BlockState>,
-    actual_palette: Option<HashMap<isize, BlockState>>,
+    temp_palette: HashMap<isize, Arc<BlockState>>,
+    actual_palette: Option<HashMap<isize, Arc<BlockState>>>,
 }
 
 fn temp_state_from_temp_id(
-    temp_palette: &mut HashMap<isize, BlockState>, id: isize
-) -> &BlockState {
+    temp_palette: &mut HashMap<isize, Arc<BlockState>>, id: isize
+) -> Arc<BlockState> {
     if !temp_palette.contains_key(&id) {
         let unknown_state = BlockState::new(
             "unknown".to_string(),
             vec![("id".to_string(), id.to_string())],
         );
-        temp_palette.insert(id, unknown_state);
+        temp_palette.insert(id, Arc::from(unknown_state));
     }
-    temp_palette.get(&id).unwrap()
+    temp_palette.get(&id).unwrap().clone()
 }
 
 impl Region for LazyPaletteBlockStoreWrapper {
@@ -314,7 +316,7 @@ impl LazyPaletteBlockStoreWrapper {
         }
     }
 
-    pub fn block_at(&self, pos: &BlockPosition) -> Result<Option<&BlockState>, String> {
+    pub fn block_at(&self, pos: &BlockPosition) -> Result<Option<Arc<BlockState>>, String> {
         match self.actual_palette {
             None => Err("Can not access blocks if palette is not provided".to_string()),
             Some(ref palette) => {
@@ -322,7 +324,7 @@ impl LazyPaletteBlockStoreWrapper {
                     let id_str = &state.properties[0].1;
                     let id: isize = id_str.parse().map_err(|_| "Invalid temporary ID".to_string())?;
                     if let Some(actual_state) = palette.get(&id) {
-                        Ok(Some(actual_state))
+                        Ok(Some(actual_state.clone()))
                     } else {
                         Err("Temporary ID not found in actual palette".to_string())
                     }
@@ -348,7 +350,7 @@ impl LazyPaletteBlockStoreWrapper {
         self.inner.remove_block_at(pos)
     }
 
-    pub fn set_actual_palette(&mut self, palette: HashMap<isize, BlockState>) {
+    pub fn set_actual_palette(&mut self, palette: HashMap<isize, Arc<BlockState>>) {
         self.actual_palette = Some(palette);
     }
 }
@@ -382,10 +384,10 @@ mod tests {
         let boundary = Boundary::new(0, 0, 0, 10, 10, 10);
         let mut store = SparseBlockStore::new(boundary, false);
         let pos = BlockPosition { x: 1, y: 1, z: 1 };
-        let state = BlockState::from_str("stone".to_string()).unwrap();
-        store.set_block_at(&pos, &state).unwrap();
+        let state = Arc::from(BlockState::from_str("stone".to_string()).unwrap());
+        store.set_block_at(&pos, state.clone()).unwrap();
         let retrieved = store.block_at(&pos).unwrap().unwrap();
-        assert_eq!(retrieved, &state);
+        assert_eq!(retrieved, state.clone());
         store.remove_block_at(pos.clone()).unwrap();
         let retrieved = store.block_at(&pos).unwrap();
         assert!(retrieved.is_none());
@@ -396,10 +398,10 @@ mod tests {
         let boundary = Boundary::new(0, 0, 0, 32, 32, 32);
         let mut store = PagedBlockStore::from_boundary(boundary, true);
         let pos = BlockPosition { x: 5, y: 5, z: 5 };
-        let state = BlockState::from_str("dirt".to_string()).unwrap();
-        store.set_block_at(&pos, &state).expect("Failed to set block");
+        let state = Arc::from(BlockState::from_str("dirt".to_string()).unwrap());
+        store.set_block_at(&pos, state.clone()).expect("Failed to set block");
         let retrieved = store.block_at(&pos).unwrap().unwrap();
-        assert_eq!(retrieved, &state);
+        assert_eq!(retrieved, state.clone());
         store.remove_block_at(pos.clone()).unwrap();
         let retrieved = store.block_at(&pos).unwrap();
         assert!(retrieved.is_none());
@@ -413,10 +415,11 @@ mod tests {
         let pos = BlockPosition { x: 2, y: 2, z: 2 };
         lazy_store.set_unknown_block(&pos, 1).unwrap();
         let mut actual_palette = HashMap::new();
-        actual_palette.insert(1, BlockState::from_str("grass".to_string()).unwrap());
+        let block_state = Arc::from(BlockState::from_str("grass".to_string()).unwrap());
+        actual_palette.insert(1, block_state.clone());
         lazy_store.set_actual_palette(actual_palette);
         let retrieved = lazy_store.block_at(&pos).unwrap().unwrap();
-        assert_eq!(retrieved, &BlockState::from_str("grass".to_string()).unwrap());
+        assert_eq!(retrieved, block_state.clone());
         lazy_store.remove_block_at(pos.clone()).unwrap();
         let retrieved = lazy_store.block_at(&pos).unwrap();
         assert!(retrieved.is_none());

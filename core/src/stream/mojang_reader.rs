@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::io::Write;
+use std::sync::Arc;
 use fastnbt::stream::{Error, ErrorKind, Parser, Value};
 use fastnbt::Tag;
 use crate::common::{AxisOrder, Block, BlockPosition, BlockState, Boundary, Region, Schematic};
@@ -90,7 +91,7 @@ fn poll_size(
 }
 
 impl<R: std::io::Read> SchematicInputStream for MojangSchematicInputStream<R> {
-    fn read<'a>(&'a mut self, buffer: &mut Vec<Block<'a>>, offset: usize, length: usize) -> Result<Option<usize>, String> {
+    fn read(&mut self, buffer: &mut Vec<Block>, offset: usize, length: usize) -> Result<Option<usize>, String> {
         if !self.header_read {
             self.header_read = true;
 
@@ -111,19 +112,17 @@ impl<R: std::io::Read> SchematicInputStream for MojangSchematicInputStream<R> {
                 let block_state = wrapper.block_at(&block_pos)?;
                 match block_state {
                     Some(state) => {
-                        // buffer[offset + i] = Block::new(&state, block_pos);
-                        buffer.push(Block::new(&state, block_pos));
+                        buffer.push(Block::new(state, block_pos));
                     }
                     None => {
                         // buffer[offset + i] = Block::new(&BlockState::air_state_ref(), block_pos);
-                        buffer.push(Block::new(&BlockState::air_state_ref(), block_pos));
+                        buffer.push(Block::new(BlockState::air_arc(), block_pos));
                     }
                 }
-                // println!("Read block at {:?} with state {:?}", block_pos, block_state);
                 read_blocks += 1;
             }
             if read_blocks == 0 {
-                return Ok(None); // No more blocks to read
+                return Ok(None);
             }
             self.lazy_palette.current_index += read_blocks;
             return Ok(Some(read_blocks));
@@ -185,10 +184,10 @@ impl<R: std::io::Read> MojangSchematicInputStream<R> {
     }
 
     fn extract_palette_from_nbt_stream(&mut self) -> Result<(), String> {
-        let mut palette: HashMap<isize, BlockState> = HashMap::new();
-        palette.insert(
-            0, BlockState::air()
-        );
+        let mut palette: HashMap<isize, Arc<BlockState>> = HashMap::new();
+        // palette.insert(
+        //     0, BlockState::air_arc()
+        // );
         let mut type_name = String::new();
         let mut properties = HashMap::<String, String>::new();
         let mut depth = 1;
@@ -228,9 +227,7 @@ impl<R: std::io::Read> MojangSchematicInputStream<R> {
                             if depth == 1 {
                                 let block_state = BlockState::from_name_and_properties(&type_name, &properties);
                                 let index = palette.len() as isize;
-                                palette.insert(index, block_state);
-                                // print!("Palette entry: {} with properties {:?}\n", type_name, properties);
-                                // print!("Assigned index {}\n", index);
+                                palette.insert(index, Arc::new(block_state));
                                 properties.clear();
                             }
                             if depth == 0 {
@@ -339,8 +336,13 @@ mod tests {
         let mut schematic_stream = MojangSchematicInputStream::new(&mut gz_decoder);
         let mut block_store = PagedBlockStore::empty_resizable();
         schematic_stream.read_to_end(&mut block_store).expect("Failed to read schematic to end");
+        let mut non_air_blocks = 0;
         for x in block_store.iterate_blocks(AxisOrder::XYZ) {
-            println!("Block at position {:?} has state {:?}", x.0, x.1);
+            if !x.1.clone().or_else(|| Some(BlockState::air_arc())).unwrap().is_air() {
+                println!("Block at position {:?} with state {:?}", x.0, x.1);
+                non_air_blocks += 1;
+            }
         }
+        println!("Total non-air blocks: {}", non_air_blocks);
     }
 }

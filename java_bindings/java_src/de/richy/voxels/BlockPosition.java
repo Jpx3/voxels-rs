@@ -25,6 +25,22 @@ public class BlockPosition {
   public int z() {
     return z;
   }
+  
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
+    BlockPosition that = (BlockPosition) o;
+    if (x != that.x) return false;
+    if (y != that.y) return false;
+    return z == that.z;
+  }
+  
+  public int hashCode() {
+    int result = x;
+    result = 31 * result + y;
+    result = 31 * result + z;
+    return result;
+  }
 
   public String toString() {
     return "BlockPosition{" + "x=" + x + ", y=" + y + ", z=" + z + '}';
