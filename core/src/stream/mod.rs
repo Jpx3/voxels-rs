@@ -1,6 +1,7 @@
 pub mod mojang_reader;
 pub mod mojang_writer;
 pub mod vxl_writer;
+pub mod vxl_reader;
 mod nbt_reader;
 
 use crate::common::{AxisOrder, Block, Boundary};

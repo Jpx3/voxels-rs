@@ -155,6 +155,7 @@ mod jni {
     use voxels_core::common::{AxisOrder, Block};
     use voxels_core::stream::mojang_reader::MojangSchematicInputStream;
     use voxels_core::stream::mojang_writer::MojangSchematicOutputStream;
+    use voxels_core::stream::vxl_reader::VXLSchematicInputStream;
     use voxels_core::stream::vxl_writer::VXLSchematicOutputStream;
     use crate::javastreams::{JavaInputStream, JavaOutputStream};
     use super::*;
@@ -186,9 +187,12 @@ mod jni {
                 env, input_stream,
             )?;
             use flate2::read::GzDecoder;
-            let sis = match schematic_type_str.as_str() {
+            let sis: Box<dyn SchematicInputStream> = match schematic_type_str.as_str() {
                 "MOJANG" => {
-                    MojangSchematicInputStream::new(GzDecoder::new(stream))
+                    Box::new(MojangSchematicInputStream::new(GzDecoder::new(stream)))
+                },
+                "VXL" => {
+                    Box::new(VXLSchematicInputStream::new(GzDecoder::new(stream)))
                 },
                 _ => {
                     env.throw_new("java/lang/IllegalArgumentException", "Unknown schematic type")?;
@@ -197,8 +201,7 @@ mod jni {
             };
             let boxedHandle = Box::new(
                 BlockInputStreamHandle {
-                    sis: Box::new(sis),
-                    jni_cache: JniCache::init(env)?
+                    sis, jni_cache: JniCache::init(env)?
                 }
             );
             let ptr = Box::into_raw(boxedHandle) as jlong;

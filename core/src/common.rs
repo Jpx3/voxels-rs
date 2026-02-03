@@ -137,7 +137,7 @@ impl Boundary {
         }
     }
 
-    fn new_from_min_max(min_x: i32, min_y: i32, min_z: i32, max_x: i32, max_y: i32, max_z: i32) -> Self {
+    pub(crate) fn new_from_min_max(min_x: i32, min_y: i32, min_z: i32, max_x: i32, max_y: i32, max_z: i32) -> Self {
         Boundary {
             min_x,
             min_y,
