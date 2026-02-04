@@ -24,10 +24,13 @@ public class Voxels {
   public static native BlockOutputStream blocksToBytes(OutputStream outputStream, SchematicType schematicType, Boundary boundary);
 
   public static synchronized void initialize() {
-    // No-op method to ensure the class is loaded and the native library is initialized.
+    // No-op: just to ensure the static block is executed.
   }
+
+  private static native void init0();
 
   static {
     System.loadLibrary("voxels_java");
+    init0();
   }
 }

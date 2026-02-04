@@ -2,6 +2,7 @@ use crate::common::{AxisOrder, Block, BlockState, Boundary, Region};
 use crate::stream::SchematicOutputStream;
 use fastnbt::{ByteArray, Value};
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::io::Write;
 use crate::store::blockstore::{BlockStore, PagedBlockStore};
 
@@ -37,7 +38,7 @@ impl<W: Write> SpongeSchematicOutputStream<W> {
     }
 }
 
-impl<W: Write> SchematicOutputStream for SpongeSchematicOutputStream<W> {
+impl<W: Write + Debug> SchematicOutputStream for SpongeSchematicOutputStream<W> {
     fn write(&mut self, blocks: &[Block]) -> Result<usize, String> {
         self.block_store.insert(blocks, 0, blocks.len())?;
         Ok(blocks.len())

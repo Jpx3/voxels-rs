@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use voxels_core::common::{Block, BlockPosition, BlockState, Boundary};
 use voxels_core::stream::{SchematicInputStream, SchematicOutputStream};
+use tracing::{info, span, Level};
 
 pub struct BlockInputStreamHandle {
     pub sis: Box<dyn SchematicInputStream>,
@@ -147,11 +148,14 @@ fn override_block_position(
 
 #[bridge]
 mod jni {
-    use super::*;
+
+use std::io::BufWriter;use super::*;
     use crate::javastreams::{JavaInputStream, JavaOutputStream};
     use flate2::Compression;
     use robusta_jni::convert::Field;
     use robusta_jni::jni::sys::jlong;
+    use tracing_subscriber::fmt::format::FmtSpan;
+    use tracing_subscriber::FmtSubscriber;
     use voxels_core::common::{AxisOrder, Block};
     use voxels_core::stream::mojang_reader::MojangSchematicInputStream;
     use voxels_core::stream::mojang_writer::MojangSchematicOutputStream;
@@ -172,6 +176,7 @@ mod jni {
             input_stream: JObject<'env>,
             schematic_type: JObject<'env>,
         ) -> JniResult<JObject<'env>> {
+
             if input_stream.is_null() {
                 env.throw_new("java/lang/NullPointerException", "Input stream is null")?;
                 return Ok(JObject::null());
@@ -245,7 +250,7 @@ mod jni {
                         return Ok(JObject::null());
                     }
                     Box::new(VXLSchematicOutputStream::new(
-                        GzEncoder::new(stream, Compression::default()),
+                        BufWriter::new(GzEncoder::new(stream, Compression::default())),
                         AxisOrder::XYZ,
                         boundary_r.unwrap()
                     ))
@@ -265,6 +270,18 @@ mod jni {
             let obj = env.new_object("de/richy/voxels/BlockOutputStream", "()V", &[])?;
             env.set_field(obj.clone(), "ptr", "J", ptr.into(), )?;
             Ok(obj)
+        }
+
+        pub extern "jni" fn init0(
+            _env: &JNIEnv<'env>
+        ) {
+            // let subscriber = FmtSubscriber::builder()
+            //     .with_span_events(FmtSpan::ENTER | FmtSpan::CLOSE)
+            //     .with_max_level(Level::TRACE)
+            //     .finish();
+            // tracing::subscriber::set_global_default(subscriber)
+            //     .expect("setting default subscriber failed");
+            // info!("Voxels JNI initialized with tracing subscriber");
         }
     }
 
@@ -305,7 +322,11 @@ mod jni {
             let ptr = ptr_value as *mut BlockInputStreamHandle;
             let handle = unsafe { &mut *ptr };
             let mut blocks: Vec<Block> = Vec::with_capacity(length as usize);
+
+            // let my_span = span!(Level::INFO, "BlockInputStream.read", length = length);
+            // let _enter = my_span.enter();
             let read_result = handle.sis.read(&mut blocks, 0, length as usize);
+
             match read_result {
                 Ok(Some(read_blocks)) => {
                     for i in 0..read_blocks {
@@ -444,6 +465,9 @@ mod jni {
                 };
                 blocks.push(block);
             }
+
+            // let my_span = span!(Level::INFO, "BlockOutputStream.write", length = length);
+            // let _enter = my_span.enter();
             match handle.sos.write(&*blocks) {
                 Ok(_) => Ok(()),
                 Err(e) => {

@@ -87,14 +87,30 @@ public class TestAll {
           try(
             BlockOutputStream bos = Voxels.blocksToBytes(os, SchematicType.VXL, boundary);
           ) {
-            long start = System.currentTimeMillis();
+            long cnt = 0;
+            long durationReader = 0;
+            long durationWriter = 0;
             Block[] buffer = new Block[512];
             int read;
-            while ((read = bis.read(buffer)) != -1) {
-              bos.write(buffer, 0, read);
+            while (true) {
+                long startRead = System.currentTimeMillis();
+                read = bis.read(buffer);
+                long endRead = System.currentTimeMillis();
+                durationReader += (endRead - startRead);
+                if (read == -1) {
+                    break;
+                }
+                long startWrite = System.currentTimeMillis();
+                bos.write(buffer, 0, read);
+                long endWrite = System.currentTimeMillis();
+                durationWriter += (endWrite - startWrite);
+                cnt += read;
             }
-            long end = System.currentTimeMillis();
-            System.out.println("Time taken: " + (end - start) + " ms");
+            System.out.println("Total blocks processed: " + cnt);
+            System.out.println("Total reading time: " + durationReader + " ms");
+            System.out.println("Total writing time: " + durationWriter + " ms");
+            System.out.println("Overall time: " + (durationReader + durationWriter) + " ms");
+
             }
         }
     }

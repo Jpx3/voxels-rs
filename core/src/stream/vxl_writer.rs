@@ -15,6 +15,8 @@ pub struct VXLSchematicOutputStream<W: Write> {
     axis_order: AxisOrder,
     boundary: Boundary,
     written_blocks: usize,
+
+    diff_cache: HashMap<Arc<BlockState>, (i32, String)>,
 }
 
 impl<W: Write> SchematicOutputStream for VXLSchematicOutputStream<W> {
@@ -42,6 +44,7 @@ impl<W: Write> VXLSchematicOutputStream<W> {
             closed: false,
             axis_order, boundary,
             written_blocks: 0,
+            diff_cache: HashMap::new(),
         }
     }
 
@@ -70,58 +73,48 @@ impl<W: Write> VXLSchematicOutputStream<W> {
         if self.closed {
             return Err("VXL: Stream is closed".into());
         }
-        let boundary = self.boundary;
-        let axis_order = self.axis_order;
-        let skipped = self.written_blocks;
-        let mut iterator = boundary.iter(axis_order).skip(skipped);
         let mut index = 0;
         let end = blocks.len();
         while index < end {
             let current_block = &blocks[index];
-            let mut expected_pos = iterator.next().ok_or("Region iterator exhausted 2")?;
-            let block_position = current_block.position;
-            if !self.boundary.contains(&block_position) {
+            let flat_index = self.axis_order.index(
+                &current_block.position,
+                &self.boundary
+            ) as usize;
+            if flat_index < self.written_blocks {
                 return Err(format!(
-                    "VXL: Block position out of boundary at index {}: position {:?}, boundary {:?}",
-                    index, block_position, self.boundary
+                    "VXL: Blocks out of order. Current cursor at {}, but received block at {}",
+                    self.written_blocks, flat_index
                 ));
             }
-            if current_block.position != expected_pos {
-                let mut gap_count = 1;
-                while current_block.position != expected_pos {
-                    expected_pos = iterator.next().ok_or("VXL: Block position not found in remaining boundary")?;
-                    if current_block.position != expected_pos {
-                        gap_count += 1;
-                    }
-                }
-                let state = BlockState::air_arc();
-                self.write_palette_id_with_rle(&state, gap_count)?;
+            if flat_index > self.written_blocks {
+                let gap = flat_index - self.written_blocks;
+                let air = BlockState::air_arc(); // Assuming this helper exists as used in your snippet
+                self.write_palette_id_with_rle(&air, gap as i32)?;
+                self.written_blocks += gap;
             }
-            let mut run_length = 1;
+            let mut run_length = 0;
+            let start_cursor = self.written_blocks;
+
             while index + run_length < end {
-                if blocks[index + run_length].state != current_block.state {
+                let next_block = &blocks[index + run_length];
+                if next_block.state != current_block.state {
                     break;
                 }
-                let option = iterator.next();
-                if option.is_none() {
-                    break;
-                }
-                let actual_pos = blocks[index + run_length].position;
-                let expected_pos = option.unwrap();
-                if !self.boundary.contains(&actual_pos) {
-                    break;
-                }
-                if actual_pos != expected_pos {
+                let next_flat = self.axis_order.index(&next_block.position, &self.boundary) as usize;
+                if next_flat != start_cursor + run_length {
                     break;
                 }
                 run_length += 1;
             }
-            let state = &current_block.state;
-           self.write_palette_id_with_rle(state, run_length as i32)?;
+
+            self.write_palette_id_with_rle(&current_block.state, run_length as i32)?;
+
             index += run_length;
+            self.written_blocks += run_length;
         }
-        self.written_blocks += index;
-        Ok(index)
+
+        Ok(self.written_blocks)
     }
 
     fn write_palette_id_with_rle(
@@ -140,48 +133,55 @@ impl<W: Write> VXLSchematicOutputStream<W> {
     }
 
     fn palette_id_from_state(&mut self, state: &Arc<BlockState>) -> Result<i32, String> {
-        let palette_id = if let Some(&id) = self.running_palette.get(state) {
-            id
+        if let Some(&id) = self.running_palette.get(state) {
+            return Ok(id);
+        }
+        let new_id = (self.running_palette.len() as i32 + 1) * 2;
+        if self.running_palette.is_empty() {
+            self.write_var_int(0);
+            self.write_var_int(0);
+            self.write_string(&state.to_string())?;
         } else {
-            let new_id = (self.running_palette.len() as i32 + 1) * 2;
-            if self.running_palette.is_empty() {
-                self.write_var_int(0);
-                self.write_var_int(0);
-                self.write_string(&state.to_string())?;
-            } else {
-                let closest = self.find_closest_state(state).unwrap();
-                let closest_id = *self.running_palette.get(&closest).unwrap();
-                self.write_var_int(1);
-                self.write_var_int(closest_id);
-                self.write_string(&closest.difference(state))?;
-            }
-            self.running_palette.insert(Arc::clone(state), new_id);
-            new_id
-        };
-        Ok(palette_id)
+            let closest = self.find_closest_state(state).unwrap();
+            let closest_id = *self.running_palette.get(&closest).unwrap();
+            let diff_str = closest.difference(state);
+            self.write_var_int(1);
+            self.write_var_int(closest_id);
+            self.write_string(&diff_str)?;
+        }
+        self.running_palette.insert(Arc::clone(state), new_id);
+        Ok(new_id)
     }
 }
 
 impl<W: Write> VXLSchematicOutputStream<W> {
     fn write_var_int(&mut self, mut value: i32) {
+        let mut buf = [0u8; 5];
+        let mut pos = 0;
         loop {
             if (value & !0x7F) == 0 {
-                self.writer.write_all(&[value as u8]).map_err(|e| e.to_string()).expect("Failed to write varint");
-                return
+                buf[pos] = value as u8;
+                self.writer.write_all(&buf[..pos + 1]).expect("Write failed");
+                return;
             }
-            self.writer.write_all(&[((value & 0x7F) | 0x80) as u8]).map_err(|e| e.to_string()).expect("Failed to write varint");
+            buf[pos] = ((value & 0x7F) | 0x80) as u8;
             value >>= 7;
+            pos += 1;
         }
     }
 
     fn write_var_long(&mut self, mut value: i64) {
+        let mut buf = [0u8; 10];
+        let mut pos = 0;
         loop {
             if (value & !0x7F) == 0 {
-                self.writer.write_all(&[value as u8]).map_err(|e| e.to_string()).expect("Failed to write varlong");
-                return
+                buf[pos] = value as u8;
+                self.writer.write_all(&buf[..pos + 1]).expect("Write failed");
+                return;
             }
-            self.writer.write_all(&[((value & 0x7F) | 0x80) as u8]).map_err(|e| e.to_string()).expect("Failed to write varlong");
+            buf[pos] = ((value & 0x7F) | 0x80) as u8;
             value >>= 7;
+            pos += 1;
         }
     }
 

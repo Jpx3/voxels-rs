@@ -26,7 +26,7 @@ impl<R: Read> SchematicInputStream for SpongeSchematicInputStream<R> {
         let mut blocks_written = 0;
         let boundary = self.boundary.unwrap();
         let blocks_store = self.blocks.as_ref().unwrap();
-        let mut block_iter = boundary.iter(AxisOrder::XZY).skip(self.read_blocks);
+        let mut block_iter = boundary.iter(AxisOrder::XYZ).skip(self.read_blocks);
         while blocks_written < length {
             let pos = match block_iter.next() {
                 Some(p) => p,
@@ -162,7 +162,6 @@ impl<R: Read> SpongeSchematicInputStream<R> {
         match block_tag {
             Value::ByteArray(byte_array) => {
                 let bytes = byte_array.deref();
-                // let bytes = Self::i8_bytes_into_u8(bytes);
                 let bytes = bytes.iter().map(|b| *b as u8).collect::<Vec<u8>>();
                 let block_states = self.read_var_int_array(&bytes)?;
                 let boundary = self.boundary.unwrap();

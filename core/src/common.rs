@@ -73,7 +73,7 @@ impl AxisOrder {
         }
     }
 
-    fn index(&self, pos: &BlockPosition, boundary: &Boundary) -> i32 {
+    pub fn index(&self, pos: &BlockPosition, boundary: &Boundary) -> i32 {
         let mut index = 0;
         for axis in self.axis() {
             let coord = match axis {
@@ -423,44 +423,38 @@ impl BlockState {
         }
         Ok(BlockState::from_name_and_properties(&new_type_name, &new_properties))
     }
-
     pub fn difference(&self, other: &BlockState) -> String {
-        let mut sb = String::new();
+        let mut sb = String::with_capacity(64);
         if self.name != other.name {
             sb.push_str(&other.name);
         }
-        let updates: Vec<String> = other
-            .properties
-            .iter()
-            .filter(|(k, v)| {
-                self.properties
-                    .iter()
-                    .find(|(sk, sv)| *sk == *k)
-                    .map_or(true, |(_, sv)| *sv != *v)
-            })
-            .map(|(k, v)| format!("{}={}", k, v))
-            .collect();
-        let removals: Vec<String> = self
-            .properties
-            .iter()
-            .filter(|(k, _)| !other.properties.iter().any(|(ok, _)| *ok == *k))
-            .map(|(k, _)| k.clone())
-            .collect();
-        if !updates.is_empty() {
-            if !sb.is_empty() {
-                sb.push('+');
-            } else {
-                sb.push('+');
+        let mut first_update = true;
+        for (k, v) in &other.properties {
+            let existing = self.properties.iter().find(|(sk, _)| sk == k);
+            if existing.map_or(true, |(_, sv)| sv != v) {
+                if first_update {
+                    sb.push('+');
+                    first_update = false;
+                } else {
+                    sb.push(',');
+                }
+                sb.push_str(k);
+                sb.push('=');
+                sb.push_str(v);
             }
-            sb.push_str(&updates.join(","));
         }
-        if !removals.is_empty() {
-            if !sb.is_empty() {
-                sb.push('-');
-            } else {
-                sb.push('-');
+        let mut first_removal = true;
+        for (k, _) in &self.properties {
+            // If key is not in 'other', it was removed
+            if !other.properties.iter().any(|(ok, _)| ok == k) {
+                if first_removal {
+                    sb.push('-');
+                    first_removal = false;
+                } else {
+                    sb.push(',');
+                }
+                sb.push_str(k);
             }
-            sb.push_str(&removals.join(","));
         }
         sb
     }
@@ -719,6 +713,16 @@ mod tests {
         let state_str = "minecraft:stone variant=granite]";
         let result = super::BlockState::from_str(state_str.to_string());
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_indexing() {
+        let boundary = super::Boundary::new(0, 0, 0, 4, 4, 4);
+        let pos = super::BlockPosition::new(2, 1, 3);
+        let index_xyz = super::AxisOrder::XYZ.index(&pos, &boundary);
+        let index_yzx = super::AxisOrder::YZX.index(&pos, &boundary);
+        assert_eq!(index_xyz, 2 * 16 + 1 * 4 + 3); // 2*16 + 1*4 + 3 = 35
+        assert_eq!(index_yzx, 1 * 16 + 3 * 4 + 2); // 1*16 + 3*4 + 2 = 30
     }
 
     #[test]
