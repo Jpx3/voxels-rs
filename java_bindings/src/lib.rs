@@ -10,7 +10,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use voxels_core::common::{Block, BlockPosition, BlockState, Boundary};
 use voxels_core::stream::{SchematicInputStream, SchematicOutputStream};
-use tracing::{info, span, Level};
 
 pub struct BlockInputStreamHandle {
     pub sis: Box<dyn SchematicInputStream>,
@@ -149,17 +148,16 @@ fn override_block_position(
 #[bridge]
 mod jni {
 
-use std::io::BufWriter;use super::*;
+use std::io::{BufReader, BufWriter};use super::*;
     use crate::javastreams::{JavaInputStream, JavaOutputStream};
     use flate2::Compression;
     use robusta_jni::convert::Field;
     use robusta_jni::jni::sys::jlong;
-    use tracing_subscriber::fmt::format::FmtSpan;
-    use tracing_subscriber::FmtSubscriber;
     use voxels_core::common::{AxisOrder, Block};
     use voxels_core::stream::mojang_reader::MojangSchematicInputStream;
     use voxels_core::stream::mojang_writer::MojangSchematicOutputStream;
     use voxels_core::stream::sponge_reader::SpongeSchematicInputStream;
+    use voxels_core::stream::sponge_writer::SpongeSchematicOutputStream;
     use voxels_core::stream::vxl_reader::VXLSchematicInputStream;
     use voxels_core::stream::vxl_writer::VXLSchematicOutputStream;
 
@@ -196,7 +194,12 @@ use std::io::BufWriter;use super::*;
                     Box::new(MojangSchematicInputStream::new(GzDecoder::new(stream)))
                 },
                 "VXL" => {
-                    Box::new(VXLSchematicInputStream::new(GzDecoder::new(stream)))
+                    Box::new(VXLSchematicInputStream::new(
+                        BufReader::new(
+                            GzDecoder::new(stream)
+                            // stream
+                        ),
+                    ))
                 },
                 "SPONGE" => {
                     Box::new(SpongeSchematicInputStream::new(GzDecoder::new(stream)))
@@ -250,11 +253,24 @@ use std::io::BufWriter;use super::*;
                         return Ok(JObject::null());
                     }
                     Box::new(VXLSchematicOutputStream::new(
-                        BufWriter::new(GzEncoder::new(stream, Compression::default())),
+                        BufWriter::new(
+                            GzEncoder::new(stream, Compression::default())
+                            // stream
+                        ),
                         AxisOrder::XYZ,
                         boundary_r.unwrap()
                     ))
                 },
+                "SPONGE" => {
+                    if boundary_r.is_none() {
+                        env.throw_new("java/lang/IllegalArgumentException", "Boundary must be provided for SPONGE schematic type")?;
+                        return Ok(JObject::null());
+                    }
+                    Box::new(SpongeSchematicOutputStream::new(
+                        GzEncoder::new(stream, Compression::default()),
+                        boundary_r.unwrap()
+                    ))
+                }
                 _ => {
                     env.throw_new("java/lang/IllegalArgumentException", "Unknown schematic type")?;
                     return Ok(JObject::null());
@@ -323,8 +339,6 @@ use std::io::BufWriter;use super::*;
             let handle = unsafe { &mut *ptr };
             let mut blocks: Vec<Block> = Vec::with_capacity(length as usize);
 
-            // let my_span = span!(Level::INFO, "BlockInputStream.read", length = length);
-            // let _enter = my_span.enter();
             let read_result = handle.sis.read(&mut blocks, 0, length as usize);
 
             match read_result {

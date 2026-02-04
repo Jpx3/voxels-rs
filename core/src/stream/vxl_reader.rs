@@ -24,42 +24,42 @@ impl<R: Read> SchematicInputStream for VXLSchematicInputStream<R> {
         if !self.header_read {
             self.read_header()?;
         }
-        if self.boundary.is_none() || self.axis_order.is_none() {
-            return Err("VXL: Header not properly read".into());
-        }
-        let mut blocks_read = 0;
+
+        let boundary = self.boundary.ok_or("VXL: Missing boundary")?;
+        let axis_order = self.axis_order.ok_or("VXL: Missing axis order")?;
+
         let mut blocks_written = 0;
-        let boundary = self.boundary.unwrap();
-        let axis_order = self.axis_order.unwrap();
+
         while blocks_written < length {
             if self.remaining_run_length <= 0 {
                 if !self.parse_next_instruction()? {
                     break;
                 }
             }
-            let allowed_to_be_written = (length - blocks_written) as i32;
-            let attempt_to_write = min(
-                allowed_to_be_written,
+
+            let attempt_to_process = min(
+                (length - blocks_written) as i32,
                 self.remaining_run_length
             ) as usize;
+
             if let Some(state) = &self.current_run_state {
                 let mut pos_iter = boundary.iter(axis_order).skip(self.read_blocks);
-                for _ in 0..attempt_to_write {
-                    let pos = pos_iter.next().ok_or("VXL: Boundary size mismatch (iterator exhausted before stream)")?;
+                for r in 0..attempt_to_process {
+                    let pos = pos_iter.next().ok_or("VXL: Iterator exhausted")?;
                     if !state.is_air() {
-                        let block = Block {
+                        buffer.push(Block {
                             position: pos,
                             state: Arc::clone(state),
-                        };
-                        buffer.push(block);
+                        });
                         blocks_written += 1;
                     }
-                    blocks_read += 1;
+                    self.read_blocks += 1;
                 }
             }
-            self.remaining_run_length -= attempt_to_write as i32;
+            self.remaining_run_length -= attempt_to_process as i32;
         }
-        if blocks_read == 0 && length > 0 {
+
+        if blocks_written == 0 && length > 0 {
             Ok(None)
         } else {
             Ok(Some(blocks_written))
@@ -120,9 +120,10 @@ impl<R: Read> VXLSchematicInputStream<R> {
                 0 => {
                     let _ = self.read_var_int()?;
                     let state_str = self.read_string()?;
-                    let state = BlockState::from_str(state_str)
+                    let state = BlockState::from_string(state_str)
                         .map_err(|e| format!("VXL: Parse error: {}", e))?;
                     let id = (self.palette.len() as i32 + 1) * 2;
+                    // println!("VXL Command: AddPaletteEntry ID={} State={}", id, state);
                     self.palette.insert(id, Arc::new(state));
                 }
                 1 => {
@@ -133,17 +134,20 @@ impl<R: Read> VXLSchematicInputStream<R> {
                     let state = base.update(&diff_str)
                         .map_err(|e| format!("VXL: Diff error: {}", e))?;
                     let id = (self.palette.len() as i32 + 1) * 2;
+                    // println!(
+                    //     "VXL Command: AddPaletteDiff NewID={} RefID={} Diff={} OldState={} NewState={}",
+                    //     id, ref_id, diff_str, base, state
+                    // );
                     self.palette.insert(id, Arc::new(state));
                 }
                 cmd => {
                     let is_rle = (cmd & 1) != 0;
                     let id = if is_rle { cmd - 1 } else { cmd };
                     let length = if is_rle { self.read_var_int()? } else { 1 };
-
                     let state = self.palette.get(&id)
                         .cloned()
                         .ok_or_else(|| format!("VXL: Unknown Palette ID {}", id))?;
-
+                    // println!("VXL Command: Draw ID={} State={} Length={} HasRLE={}", id, state, length, is_rle);
                     self.current_run_state = Some(state);
                     self.remaining_run_length = length;
                     return Ok(true);
@@ -209,6 +213,54 @@ impl<R: Read> VXLSchematicInputStream<R> {
             4 => Ok(AxisOrder::ZXY),
             5 => Ok(AxisOrder::ZYX),
             n => Err(format!("VXL: Invalid AxisOrder {}", n)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Cursor;
+    use std::sync::Arc;
+    use crate::common::{AxisOrder, Block, BlockState, Boundary, Region};
+    use crate::stream::SchematicInputStream;
+    use super::VXLSchematicInputStream;
+
+    #[test]
+    fn test_vlx_reader() {
+        let vxl_data: Vec<u8> = vec![205,164,145,226,132,203,21,1,0,0,0,1,0,2,0,0,0,15,109,105,110,101,99,114,97,102,116,58,97,105,114,91,93,3,3,1,2,15,109,105,110,101,99,114,97,102,116,58,115,116,111,110,101,5,2,2];
+        let cursor = Cursor::new(vxl_data);
+        let mut reader = VXLSchematicInputStream::new(cursor);
+
+        let air_state = BlockState::air_arc();
+        let stone_state = Arc::new(BlockState::from_str("minecraft:stone").unwrap());
+
+        let blocks_states = vec![
+            air_state.clone(),
+            air_state.clone(),
+            air_state.clone(),
+            stone_state.clone(),
+            stone_state.clone(),
+            air_state.clone(),
+        ];
+
+        let boundary = Boundary::new_from_size(2, 1, 3);
+        let expected_blocks: Vec<Block> = boundary.iter(AxisOrder::XYZ)
+            .zip(blocks_states.iter())
+            .map(|(pos, state)| Block { position: pos, state: Arc::clone(state) })
+            .collect();
+
+        let expected_blocks: Vec<Block> = expected_blocks.into_iter()
+            .filter(|b| !b.state.is_air())
+            .collect();
+
+        let mut blocks = Vec::new();
+        let result = reader.read(&mut blocks, 0, boundary.volume());
+
+        if let Ok(Some(count)) = result {
+            assert_eq!(count, expected_blocks.len());
+            assert_eq!(blocks, expected_blocks);
+        } else {
+            panic!("Failed to read blocks from VXL stream: {:?}", result);
         }
     }
 }

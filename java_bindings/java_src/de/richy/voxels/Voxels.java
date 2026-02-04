@@ -4,6 +4,15 @@ import java.io.InputStream;
 import java.io.OutputStream;
 
 public class Voxels {
+
+  public static BlockInputStream bytesToBlocks(InputStream inputStream) {
+    return blocksFromBytes(inputStream, SchematicType.VXL);
+  }
+
+  public static BlockInputStream bytesToBlocks(InputStream inputStream, SchematicType schematicType) {
+    return blocksFromBytes(inputStream, schematicType);
+  }
+
   public static BlockInputStream blocksFromBytes(InputStream inputStream) {
     return blocksFromBytes(inputStream, SchematicType.UNKNOWN);
   }

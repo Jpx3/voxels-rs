@@ -1,4 +1,4 @@
-use crate::common::{AxisOrder, Block, BlockState, Boundary, Region};
+use crate::common::{AxisOrder, Block, BlockState, Boundary};
 use crate::stream::SchematicOutputStream;
 use std::collections::HashMap;
 use std::io::Write;
@@ -209,4 +209,160 @@ impl<W: Write> VXLSchematicOutputStream<W> {
         };
         self.writer.write_all(&[val]).map_err(|e| e.to_string())
     }
+}
+
+
+#[cfg(test)]
+mod test{
+    use std::io::{Cursor, Read};
+    use std::sync::Arc;
+    use crate::common::{AxisOrder, Block, BlockPosition, BlockState, Boundary, Region};
+    use crate::stream::SchematicOutputStream;
+
+    #[test]
+    fn test_vxl_writer() {
+        let air_state = BlockState::air_arc();
+        let stone_state = Arc::new(BlockState::from_str("minecraft:stone").unwrap());
+
+        let blocks_states = vec![
+            None,
+            None,
+            None,
+            Some(stone_state.clone()),
+            Some(stone_state.clone()),
+            Some(air_state.clone()),
+        ];
+
+        let boundary = Boundary::new_from_size(2, 1, 3);
+        let blocks: Vec<Block> = boundary.iter(AxisOrder::XYZ)
+            .zip(blocks_states.into_iter())
+            .filter_map(|(pos, state_opt)| {
+                state_opt.map(|state| Block {
+                    position: pos,
+                    state,
+                })
+            })
+            .collect();
+
+        let mut buffer: Vec<u8> = Vec::new();
+        {
+            let mut writer = super::VXLSchematicOutputStream::new(
+                &mut buffer,
+                AxisOrder::XYZ,
+                boundary,
+            );
+            writer.write(&blocks).unwrap();
+            writer.complete().unwrap();
+        }
+
+        // print to rust !vec for easy copy-paste
+        print!("let vxl_data: Vec<u8> = vec![");
+        for byte in &buffer {
+            print!("{},", byte);
+        }
+        println!("];");
+
+        assert!(!buffer.is_empty());
+
+        let mut cursor = Cursor::new(&buffer);
+        let expected_magic_number:i64 = 0x56584C44524D; // "VXLDRM"
+        let magic_number = read_var_long(&mut cursor).unwrap();
+        assert_eq!(magic_number, expected_magic_number);
+        let expected_version:i32 = 0x01;
+        let version = read_var_int(&mut cursor).unwrap();
+        assert_eq!(version, expected_version);
+
+        let min_x = read_var_int(&mut cursor).unwrap();
+        let min_y = read_var_int(&mut cursor).unwrap();
+        let min_z = read_var_int(&mut cursor).unwrap();
+        let max_x = read_var_int(&mut cursor).unwrap();
+        let max_y = read_var_int(&mut cursor).unwrap();
+        let max_z = read_var_int(&mut cursor).unwrap();
+        assert_eq!(min_x, 0);
+        assert_eq!(min_y, 0);
+        assert_eq!(min_z, 0);
+        assert_eq!(max_x, 1);
+        assert_eq!(max_y, 0);
+        assert_eq!(max_z, 2);
+
+        let axis_order_byte = {
+            let mut byte = [0u8; 1];
+            cursor.read_exact(&mut byte).unwrap();
+            byte[0]
+        };
+        assert_eq!(axis_order_byte, 0);
+
+    //     must be
+    //      add air state to the palette as new state (id 2)
+    //      push air x3
+    //      add stone state to the palette as diff from air (id 4)
+    //     push stone x2
+    //     push air x1
+
+        let air_command = read_var_int(&mut cursor).unwrap();
+        assert_eq!(air_command, 0); // new state
+        let _ = read_var_int(&mut cursor).unwrap(); // closest id (0)
+        let new_air_str = read_string(&mut cursor).unwrap();
+        // can be "minecraft:air" or "minecraft:air[]" depending on implementation
+        assert!(new_air_str.starts_with("minecraft:air"));
+        let air_push_command = read_var_int(&mut cursor).unwrap();
+        assert_eq!(air_push_command, 3); // id 3 for air
+        let air_push_length = read_var_int(&mut cursor).unwrap();
+        assert_eq!(air_push_length, 3); // run length 3
+
+        let stone_command = read_var_int(&mut cursor).unwrap();
+        assert_eq!(stone_command, 1); // diff state
+        let closest_id = read_var_int(&mut cursor).unwrap();
+        assert_eq!(closest_id, 2); // closest id is air (2)
+        let diff_str = read_string(&mut cursor).unwrap();
+        assert_eq!(diff_str, "minecraft:stone");
+        let stone_push_command = read_var_int(&mut cursor).unwrap();
+        assert_eq!(stone_push_command, 5); // id 5 for stone with RLE
+        let stone_push_length = read_var_int(&mut cursor).unwrap();
+        assert_eq!(stone_push_length, 2); // run length 2
+
+        let final_air_command = read_var_int(&mut cursor).unwrap();
+        assert_eq!(final_air_command, 2); // id 2 for air without RLE
+    }
+
+    fn read_string(reader: &mut dyn Read) -> Result<String, String> {
+        let len = read_var_int(reader)?;
+        if len < 0 { return Err("Negative string length".into()); }
+        let mut buf = vec![0u8; len as usize];
+        reader.read_exact(&mut buf).map_err(|e| e.to_string())?;
+        String::from_utf8(buf).map_err(|e| e.to_string())
+    }
+
+    fn read_var_int(reader: &mut dyn Read) -> Result<i32, String> {
+        let mut result: i32 = 0;
+        let mut shift = 0;
+        loop {
+            let mut byte = [0u8; 1];
+            reader.read_exact(&mut byte).map_err(|e| e.to_string())?;
+            let byte_val = byte[0] as i32;
+            result |= (byte_val & 0x7F) << shift;
+            if (byte_val & 0x80) == 0 {
+                break;
+            }
+            shift += 7;
+        }
+        Ok(result)
+    }
+
+    fn read_var_long(reader: &mut dyn Read) -> Result<i64, String> {
+        let mut result: i64 = 0;
+        let mut shift = 0;
+        loop {
+            let mut byte = [0u8; 1];
+            reader.read_exact(&mut byte).map_err(|e| e.to_string())?;
+            let byte_val = byte[0] as i64;
+            result |= (byte_val & 0x7F) << shift;
+            if (byte_val & 0x80) == 0 {
+                break;
+            }
+            shift += 7;
+        }
+        Ok(result)
+    }
+
 }

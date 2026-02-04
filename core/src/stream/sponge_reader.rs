@@ -134,7 +134,7 @@ impl<R: Read> SpongeSchematicInputStream<R> {
                 Value::Int(v) => *v,
                 _ => return Err("Sponge: Palette entry value is not an Int".into()),
             };
-            let block_state = Arc::new(BlockState::from_str(name.clone())?);
+            let block_state = Arc::new(BlockState::from_string(name.clone())?);
             palette.insert(state as isize, block_state);
         }
         blocks.set_actual_palette(palette);

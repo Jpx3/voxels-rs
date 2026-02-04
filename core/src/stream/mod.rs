@@ -8,6 +8,7 @@ pub mod sponge_writer;
 use crate::common::{AxisOrder, Block, Boundary};
 use crate::store::blockstore::BlockStore;
 
+
 pub trait SchematicInputStream {
     fn read(& mut self, buffer: &mut Vec<Block>, offset: usize, length: usize)
          -> Result<Option<usize>, String>;

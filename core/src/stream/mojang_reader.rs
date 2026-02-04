@@ -113,8 +113,10 @@ impl<R: std::io::Read> SchematicInputStream for MojangSchematicInputStream<R> {
 
                 match block_state {
                     Some(state) => {
-                        buffer.push(Block::new(state, block_pos));
-                        written_blocks += 1;
+                        if !state.is_air() {
+                            buffer.push(Block::new(state, block_pos));
+                            written_blocks += 1;
+                        }
                     }
                     None => {
                         // buffer[offset + i] = Block::new(&BlockState::air_state_ref(), block_pos);
@@ -357,7 +359,7 @@ mod tests {
         let reader = BufReader::new(file);
         let mut gz_decoder = GzDecoder::new(reader);
         let mut schematic_stream = MojangSchematicInputStream::new(&mut gz_decoder);
-        let mut block_store = PagedBlockStore::empty_resizable();
+        let mut block_store = PagedBlockStore::new_empty_resizable();
         schematic_stream.read_to_end(&mut block_store).expect("Failed to read schematic to end");
         let boundary = Boundary::new(0, 0, 0, 52, 11, 52);
         let mut non_air_blocks = 0;

@@ -1,4 +1,4 @@
-use crate::common::{Block, BlockState, Boundary};
+use crate::common::{AxisOrder, Block, BlockState, Boundary, Region};
 use crate::stream::SchematicOutputStream;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -29,7 +29,7 @@ struct StructureData {
     #[serde(rename = "DataVersion")]
     data_version: i32,
     #[serde(rename = "size")]
-    size: [i16; 3],
+    size: [i32; 3],
     #[serde(rename = "palette")]
     palette: Vec<PaletteEntry>,
     #[serde(rename = "blocks")]
@@ -61,11 +61,6 @@ impl<W: std::io::Write> SchematicOutputStream for MojangSchematicOutputStream<W>
         let mut block_count = 0;
         for block in blocks {
             let block_state = block.state.clone();
-            if block_state.is_air() {
-                continue;
-            }
-            let block_position = block.position;
-            self.boundary = self.boundary.expand_to_include(&block_position);
             let state_index = if let Some(&idx) = self.palette_map.get(block_state.as_ref()) {
                 idx
             } else {
@@ -79,6 +74,8 @@ impl<W: std::io::Write> SchematicOutputStream for MojangSchematicOutputStream<W>
                 self.palette_map.insert(block_state, idx);
                 idx
             };
+            let block_position = block.position;
+            self.boundary = self.boundary.expand_to_include(&block_position);
             self.block.push(BlockEntry {
                 pos: block_position.to_array(),
                 state: state_index,
@@ -89,9 +86,36 @@ impl<W: std::io::Write> SchematicOutputStream for MojangSchematicOutputStream<W>
     }
 
     fn complete(&mut self) -> Result<(), String> {
+        // fill all missing blocks with air
+        let mut full_block_list = Vec::new();
+        for pos in self.boundary.iter(AxisOrder::XYZ) {
+            if let Some(block_entry) = self.block.iter().find(|b| {
+                b.pos == pos.to_array()
+            }) {
+                full_block_list.push(block_entry.clone());
+            } else {
+                // air block
+                let air_state_index = if let Some(&idx) = self.palette_map.get(BlockState::air_arc().as_ref()) {
+                    idx
+                } else {
+                    let idx = self.palette.len() as i32;
+                    self.palette.push(PaletteEntry {
+                        name: "minecraft:air".to_string(),
+                        properties: None,
+                    });
+                    self.palette_map.insert(BlockState::air_arc(), idx);
+                    idx
+                };
+                full_block_list.push(BlockEntry {
+                    pos: pos.to_array(),
+                    state: air_state_index,
+                });
+            }
+        }
+        self.block = full_block_list;
         let structure = StructureData {
             data_version: 3465,
-            size: self.boundary.size_as_i16_array(),
+            size: self.boundary.size_as_array(),
             palette: self.palette.clone(),
             blocks: self.block.clone()
         };

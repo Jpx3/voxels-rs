@@ -146,7 +146,7 @@ pub struct PagedBlockStore {
 }
 
 impl PagedBlockStore {
-    pub fn empty_resizable() -> Self {
+    pub fn new_empty_resizable() -> Self {
         PagedBlockStore::new(
             Boundary::new(0, 0, 0, 0, 0, 0),
             16,
@@ -155,8 +155,12 @@ impl PagedBlockStore {
             false,
         )
     }
+    
+    pub fn new_for_fixed_boundary(boundary: Boundary) -> Self {
+        PagedBlockStore::new_for_boundary(boundary, true)
+    }
 
-    pub fn for_boundary(boundary: Boundary, fixed_size: bool) -> Self {
+    pub fn new_for_boundary(boundary: Boundary, fixed_size: bool) -> Self {
         let page_size_x = ((boundary.d_x() / 8) as usize).max(8);
         let page_size_y = ((boundary.d_y() / 8) as usize).max(8);
         let page_size_z = ((boundary.d_z() / 8) as usize).max(8);
@@ -333,14 +337,14 @@ impl Region for LazyPaletteBlockStoreWrapper {
 impl LazyPaletteBlockStoreWrapper {
     pub fn empty_resizable_from_size(size_x: usize, size_y: usize, size_z: usize) -> Self {
         let boundary = Boundary::new(0, 0, 0, size_x as i32, size_y as i32, size_z as i32);
-        LazyPaletteBlockStoreWrapper::from(Box::new(PagedBlockStore::for_boundary(
+        LazyPaletteBlockStoreWrapper::from(Box::new(PagedBlockStore::new_for_boundary(
             boundary, false,
         )))
     }
 
     pub fn empty_fixed_from_size(size_x: usize, size_y: usize, size_z: usize) -> Self {
         let boundary = Boundary::new(0, 0, 0, size_x as i32, size_y as i32, size_z as i32);
-        LazyPaletteBlockStoreWrapper::from(Box::new(PagedBlockStore::for_boundary(boundary, true)))
+        LazyPaletteBlockStoreWrapper::from(Box::new(PagedBlockStore::new_for_boundary(boundary, true)))
     }
 
     pub fn from(inner: Box<dyn BlockStore>) -> Self {
@@ -457,7 +461,7 @@ mod tests {
         let boundary = Boundary::new(0, 0, 0, 10, 10, 10);
         let mut store = SparseBlockStore::new(boundary, false);
         let pos = BlockPosition { x: 1, y: 1, z: 1 };
-        let state = Arc::from(BlockState::from_str("stone".to_string()).unwrap());
+        let state = Arc::from(BlockState::from_string("stone".to_string()).unwrap());
         store.set_block_at(&pos, state.clone()).unwrap();
         let retrieved = store.block_at(&pos).unwrap().unwrap();
         assert_eq!(retrieved, state.clone());
@@ -469,9 +473,9 @@ mod tests {
     #[test]
     fn test_paged_block_store() {
         let boundary = Boundary::new(0, 0, 0, 32, 32, 32);
-        let mut store = PagedBlockStore::for_boundary(boundary, true);
+        let mut store = PagedBlockStore::new_for_boundary(boundary, true);
         let pos = BlockPosition { x: 5, y: 5, z: 5 };
-        let state = Arc::from(BlockState::from_str("dirt".to_string()).unwrap());
+        let state = Arc::from(BlockState::from_string("dirt".to_string()).unwrap());
         store
             .set_block_at(&pos, state.clone())
             .expect("Failed to set block");
@@ -490,7 +494,7 @@ mod tests {
         let pos = BlockPosition { x: 2, y: 2, z: 2 };
         lazy_store.set_unknown_block(&pos, 1).unwrap();
         let mut actual_palette = HashMap::new();
-        let block_state = Arc::from(BlockState::from_str("grass".to_string()).unwrap());
+        let block_state = Arc::from(BlockState::from_string("grass".to_string()).unwrap());
         actual_palette.insert(1, block_state.clone());
         lazy_store.set_actual_palette(actual_palette);
         let retrieved = lazy_store.block_at(&pos).unwrap().unwrap();
@@ -503,9 +507,9 @@ mod tests {
     #[test]
     fn test_large_page_store() {
         let boundary = Boundary::new(0, 0, 0, 167, 41, 125);
-        let mut store = PagedBlockStore::for_boundary(boundary, true);
+        let mut store = PagedBlockStore::new_for_boundary(boundary, true);
         let pos = BlockPosition { x: 0, y: 0, z: 15 };
-        let state = Arc::from(BlockState::from_str("sand".to_string()).unwrap());
+        let state = Arc::from(BlockState::from_string("sand".to_string()).unwrap());
         store
             .set_block_at(&pos, state.clone())
             .expect("Failed to set block");

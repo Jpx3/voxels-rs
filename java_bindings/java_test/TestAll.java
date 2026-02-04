@@ -1,147 +1,80 @@
-import java.io.InputStream;
-import java.io.OutputStream;
-import de.richy.voxels.Block;
-import de.richy.voxels.Voxels;
-import de.richy.voxels.Boundary;
-import de.richy.voxels.BlockInputStream;
-import de.richy.voxels.BlockOutputStream;
-import de.richy.voxels.SchematicType;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
+import java.io.*;
+import java.util.*;
+import de.richy.voxels.*;
 
 public class TestAll {
-    public static void main(String[] args) {
-//         try (
-//             InputStream is = new FileInputStream("C:\\Users\\strun\\RustroverProjects\\voxels-rs\\test_data\\mojang.schem");
-//             OutputStream os = new FileOutputStream("C:\\Users\\strun\\RustroverProjects\\voxels-rs\\test_data\\mojang.vxl");
-//         ) {
-//             moveMojangToVXL(is, os);
-//         } catch (Exception e) {
-//             e.printStackTrace();
-//         }
-        try (
-            InputStream is = new FileInputStream("C:\\Users\\strun\\RustroverProjects\\voxels-rs\\test_data\\sponge3.schem");
-            OutputStream os = new FileOutputStream("C:\\Users\\strun\\RustroverProjects\\voxels-rs\\test_data\\sponge3.vxl");
-        ) {
-//             readSponge(is);
-            moveSpongeToVXL(is, os);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-//         try (
-//             InputStream is = new FileInputStream("C:\\Users\\strun\\RustroverProjects\\voxels-rs\\test_data\\sponge3.vxl");
-//         ) {
-//             readVXL(is);
-//         } catch (Exception e) {
-//             e.printStackTrace();
-//         }
+  private static final String BASE_PATH = "C:/Users/strun/RustroverProjects/voxels-rs/test_data/generation_test/";
+
+  public static void main(String[] args) throws IOException {
+    writeTreeSchematic();
+    convert("tree.schematic", SchematicType.MOJANG, "tree.vxl", SchematicType.VXL);
+    convert("tree.vxl", SchematicType.VXL, "tree.schem", SchematicType.SPONGE);
+    convert("tree.schem", SchematicType.SPONGE, "tree_mojang.schematic", SchematicType.MOJANG);
+  }
+
+  private static void writeTreeSchematic() throws IOException {
+    Block[] treeBlocks = setupTestingSchematic();
+    File outFile = new File(BASE_PATH, "tree.schematic");
+
+    try (OutputStream os = new FileOutputStream(outFile);
+         BlockOutputStream bos = Voxels.blocksToBytes(os, SchematicType.MOJANG)) {
+      bos.write(treeBlocks, 0, treeBlocks.length);
     }
+  }
 
-    static void moveMojangToVXL(InputStream is, OutputStream os) throws Exception {
-        try(
-          BlockInputStream bis = Voxels.blocksFromBytes(is, SchematicType.MOJANG);
-        ) {
-          Boundary boundary = bis.boundary();
-          try(
-            BlockOutputStream bos = Voxels.blocksToBytes(os, SchematicType.VXL, boundary);
-          ) {
-            long start = System.currentTimeMillis();
-            Block[] buffer = new Block[512];
-            int read;
-            while ((read = bis.read(buffer)) != -1) {
-//               for (int i = 0; i < read; i++) {
-//                 Block b = buffer[i];
-//                 System.out.printf("JAVA Block at (%d, %d, %d): id=%s, data=%s%n", b.position().x(), b.position().y(), b.position().z(), b.state().typeName(), b.state().properties());
-//               }
-              bos.write(buffer, 0, read);
-            }
-            long end = System.currentTimeMillis();
-            System.out.println("Time taken: " + (end - start) + " ms");
-          }
-//             System.out.println("BlockState RefCnt: " + de.richy.voxels.BlockState.ref_cnt);
-//             System.out.println("BlockPosition RefCnt: " + de.richy.voxels.BlockPosition.refCnt);
-        }
+  private static void convert(String inName, SchematicType inType, String outName, SchematicType outType) throws IOException {
+    File inFile = new File(BASE_PATH, inName);
+    File outFile = new File(BASE_PATH, outName);
+
+    try (InputStream is = new FileInputStream(inFile);
+         BlockInputStream bis = Voxels.bytesToBlocks(is, inType);
+         OutputStream os = new FileOutputStream(outFile);
+         BlockOutputStream bos = Voxels.blocksToBytes(os, outType, bis.boundary())) {
+      pipeBlocks(bis, bos);
     }
+  }
 
+  private static void pipeBlocks(BlockInputStream bis, BlockOutputStream bos) throws IOException {
+    Block[] buffer = new Block[512];
+    int read;
+    while ((read = bis.read(buffer, 0, buffer.length)) != -1) {
+      bos.write(buffer, 0, read);
+    }
+  }
 
-    static void readSponge(InputStream is) throws Exception {
-        try(
-          BlockInputStream bis = Voxels.blocksFromBytes(is, SchematicType.SPONGE);
-        ) {
-          Boundary boundary = bis.boundary();
-          long start = System.currentTimeMillis();
-          Block[] buffer = new Block[512];
-          int read;
-          int count = 0;
-          while ((read = bis.read(buffer)) != -1) {
-            for (int i = 0; i < read; i++) {
-              Block b = buffer[i];
-//               System.out.printf("JAVA Block at (%d, %d, %d): id=%s, data=%s%n", b.position().x(), b.position().y(), b.position().z(), b.state().typeName(), b.state().properties());
-            count++;
+  private static Block[] setupTestingSchematic() {
+    int width = 16, height = 16, length = 16;
+    Block[] blocks = new Block[width * height * length];
+
+    int trunkX = 8, trunkZ = 8, trunkHeight = 5, leafStart = 3;
+
+    for (int x = 0; x < width; x++) {
+      for (int y = 0; y < height; y++) {
+        for (int z = 0; z < length; z++) {
+          int index = x + (y * 16) + (z * 16 * 16);
+          int dx = Math.abs(x - trunkX);
+          int dz = Math.abs(z - trunkZ);
+          int distSq = dx * dx + dz * dz;
+
+          String type = "minecraft:air";
+          Map<String, String> props = new HashMap<>();
+
+          if (dx == 0 && dz == 0 && y < trunkHeight) {
+            type = "minecraft:oak_log";
+            props.put("axis", new String[]{"y", "x", "z"}[y % 3]);
+          } else if (y >= leafStart && y <= trunkHeight + 1) {
+            int radius = (y == trunkHeight + 1) ? 2 : 3;
+            if (distSq < radius * radius && !(dx == radius - 1 && dz == radius - 1)) {
+              type = "minecraft:oak_leaves";
+              props.put("distance", "1");
+              props.put("persistent", "true");
             }
           }
-          long end = System.currentTimeMillis();
-          System.out.println("Time taken: " + (end - start) + " ms for " + count + " blocks");
 
+          blocks[index] = new Block(BlockPosition.of(x, y, z), BlockState.of(type, props));
         }
+      }
     }
-
-    static void moveSpongeToVXL(InputStream is, OutputStream os) throws Exception {
-        try(
-          BlockInputStream bis = Voxels.blocksFromBytes(is, SchematicType.SPONGE);
-        ) {
-          Boundary boundary = bis.boundary();
-          try(
-            BlockOutputStream bos = Voxels.blocksToBytes(os, SchematicType.VXL, boundary);
-          ) {
-            long cnt = 0;
-            long durationReader = 0;
-            long durationWriter = 0;
-            Block[] buffer = Block.filledBuffer(8192);
-            int read;
-            while (true) {
-                long startRead = System.currentTimeMillis();
-                read = bis.read(buffer);
-                long endRead = System.currentTimeMillis();
-                durationReader += (endRead - startRead);
-                if (read == -1) {
-                    break;
-                }
-                long startWrite = System.currentTimeMillis();
-                bos.write(buffer, 0, read);
-                long endWrite = System.currentTimeMillis();
-                durationWriter += (endWrite - startWrite);
-                cnt += read;
-            }
-            System.out.println("Total blocks processed: " + cnt);
-            System.out.println("Total reading time: " + durationReader + " ms");
-            System.out.println("Total writing time: " + durationWriter + " ms");
-            System.out.println("Overall time: " + (durationReader + durationWriter) + " ms");
-
-            }
-        }
-    }
-
-    static void readVXL(InputStream is) throws Exception {
-        try(
-          BlockInputStream bis = Voxels.blocksFromBytes(is, SchematicType.VXL);
-        ) {
-          Boundary boundary = bis.boundary();
-
-          System.out.println("Boundary: " + boundary);
-          Block[] buffer = Block.filledBuffer(512);
-          long start = System.currentTimeMillis();
-          int read;
-          int count = 0;
-          while ((read = bis.read(buffer)) != -1) {
-            for (int i = 0; i < read; i++) {
-              Block b = buffer[i];
-//               System.out.printf("JAVA Block at (%d, %d, %d): id=%s, data=%s%n", b.position().x(), b.position().y(), b.position().z(), b.state().typeName(), b.state().properties());
-              count++;
-            }
-            }
-            long end = System.currentTimeMillis();
-            System.out.println("Time taken: " + (end - start) + " ms for " + count + " blocks");
-            }
-            }
+    return blocks;
+  }
 }
