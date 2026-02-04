@@ -28,6 +28,13 @@ public class TestAll {
         } catch (Exception e) {
             e.printStackTrace();
         }
+//         try (
+//             InputStream is = new FileInputStream("C:\\Users\\strun\\RustroverProjects\\voxels-rs\\test_data\\sponge3.vxl");
+//         ) {
+//             readVXL(is);
+//         } catch (Exception e) {
+//             e.printStackTrace();
+//         }
     }
 
     static void moveMojangToVXL(InputStream is, OutputStream os) throws Exception {
@@ -90,7 +97,7 @@ public class TestAll {
             long cnt = 0;
             long durationReader = 0;
             long durationWriter = 0;
-            Block[] buffer = new Block[512];
+            Block[] buffer = Block.filledBuffer(8192);
             int read;
             while (true) {
                 long startRead = System.currentTimeMillis();
@@ -114,4 +121,27 @@ public class TestAll {
             }
         }
     }
+
+    static void readVXL(InputStream is) throws Exception {
+        try(
+          BlockInputStream bis = Voxels.blocksFromBytes(is, SchematicType.VXL);
+        ) {
+          Boundary boundary = bis.boundary();
+
+          System.out.println("Boundary: " + boundary);
+          Block[] buffer = Block.filledBuffer(512);
+          long start = System.currentTimeMillis();
+          int read;
+          int count = 0;
+          while ((read = bis.read(buffer)) != -1) {
+            for (int i = 0; i < read; i++) {
+              Block b = buffer[i];
+//               System.out.printf("JAVA Block at (%d, %d, %d): id=%s, data=%s%n", b.position().x(), b.position().y(), b.position().z(), b.state().typeName(), b.state().properties());
+              count++;
+            }
+            }
+            long end = System.currentTimeMillis();
+            System.out.println("Time taken: " + (end - start) + " ms for " + count + " blocks");
+            }
+            }
 }

@@ -9,10 +9,12 @@ public class BlockState {
   private static long __ref_cnt = 0;
   private final long __internal_id;
 
+  private final static BlockState AIR = BlockState.of("minecraft:air", Map.of());
+
   private final String typeName;
   private final Map<String, String> properties;
 
-  public BlockState(String typeName, Map<String, String> properties) {
+  private BlockState(String typeName, Map<String, String> properties) {
     this.typeName = typeName;
     this.properties = new HashMap<>(properties);
     this.__internal_id = __ref_cnt++;
@@ -24,6 +26,14 @@ public class BlockState {
 
   public Map<String, String> properties() {
     return properties;
+  }
+
+  public static BlockState air() {
+    return AIR;
+  }
+
+  public static BlockState of(String typeName, Map<String, String> properties) {
+    return new BlockState(typeName, properties);
   }
 
   public boolean equals(Object o) {

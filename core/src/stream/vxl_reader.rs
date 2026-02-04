@@ -109,22 +109,15 @@ impl<R: Read> VXLSchematicInputStream<R> {
         Ok((boundary, axis_order))
     }
 
-    /// Helper: Parses stream commands until a Block run is set up.
-    /// Returns: true if a block run is ready, false if EOF.
     fn parse_next_instruction(&mut self) -> Result<bool, String> {
         loop {
-            // Attempt to read next command byte
             let command_res = self.read_var_int();
-
-            // Handle EOF gracefully if needed, though read_var_int usually errors on partial read
-            // mapping explicit EOF error to Ok(false) could be done here if the reader supports it.
             let command = match command_res {
                 Ok(c) => c,
-                Err(_) => return Ok(false), // Assume error means EOF for this logic
+                Err(_) => return Ok(false),
             };
-
             match command {
-                0 => { // Palette (Absolute)
+                0 => {
                     let _ = self.read_var_int()?;
                     let state_str = self.read_string()?;
                     let state = BlockState::from_str(state_str)
@@ -132,7 +125,7 @@ impl<R: Read> VXLSchematicInputStream<R> {
                     let id = (self.palette.len() as i32 + 1) * 2;
                     self.palette.insert(id, Arc::new(state));
                 }
-                1 => { // Palette (Delta)
+                1 => {
                     let ref_id = self.read_var_int()?;
                     let diff_str = self.read_string()?;
                     let base = self.palette.get(&ref_id)
@@ -142,7 +135,7 @@ impl<R: Read> VXLSchematicInputStream<R> {
                     let id = (self.palette.len() as i32 + 1) * 2;
                     self.palette.insert(id, Arc::new(state));
                 }
-                cmd => { // Block Run
+                cmd => {
                     let is_rle = (cmd & 1) != 0;
                     let id = if is_rle { cmd - 1 } else { cmd };
                     let length = if is_rle { self.read_var_int()? } else { 1 };
@@ -158,9 +151,6 @@ impl<R: Read> VXLSchematicInputStream<R> {
             }
         }
     }
-
-    // Standard primitive readers (VarInt, String, Boundary, AxisOrder) ...
-    // (Include the same implementations for read_var_int, read_string, etc. as previous step)
 
     fn read_var_int(&mut self) -> Result<i32, String> {
         let mut num = 0;

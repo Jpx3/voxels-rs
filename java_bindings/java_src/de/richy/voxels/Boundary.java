@@ -13,15 +13,15 @@ public record Boundary(
   }
   
   public int maxX() {
-    return minX + dX;
+    return minX + dX - 1;
   }
   
   public int maxY() {
-    return minY + dY;
+    return minY + dY - 1;
   }
   
   public int maxZ() {
-    return minZ + dZ;
+    return minZ + dZ - 1;
   }
 
   public Boundary expandToInclude(
@@ -33,16 +33,14 @@ public record Boundary(
     int newMinX = Math.min(minX, x);
     int newMinY = Math.min(minY, y);
     int newMinZ = Math.min(minZ, z);
-    int newMaxX = Math.max(maxX(), x + 1);
-    int newMaxY = Math.max(maxY(), y + 1);
-    int newMaxZ = Math.max(maxZ(), z + 1);
+    int newMaxX = Math.max(maxX(), x);
+    int newMaxY = Math.max(maxY(), y);
+    int newMaxZ = Math.max(maxZ(), z);
     return new Boundary(
-      newMinX,
-      newMinY,
-      newMinZ,
-      newMaxX - newMinX,
-      newMaxY - newMinY,
-      newMaxZ - newMinZ
+      newMinX, newMinY, newMinZ,
+      newMaxX - newMinX + 1,
+      newMaxY - newMinY + 1,
+      newMaxZ - newMinZ + 1
     );
   }
   
@@ -51,11 +49,11 @@ public record Boundary(
     if (o == null || getClass() != o.getClass()) return false;
     Boundary boundary = (Boundary) o;
     return minX == boundary.minX &&
-        minY == boundary.minY &&
-        minZ == boundary.minZ &&
-        dX == boundary.dX &&
-        dY == boundary.dY &&
-        dZ == boundary.dZ;
+      minY == boundary.minY &&
+      minZ == boundary.minZ &&
+      dX == boundary.dX &&
+      dY == boundary.dY &&
+      dZ == boundary.dZ;
   }
   
   public int hashCode() {
@@ -78,7 +76,7 @@ public record Boundary(
         ", dZ=" + dZ +
         '}';
   }
-  
+
   public static Boundary fromMinAndMax(
     int minX, int minY, int minZ,
     int maxX, int maxY, int maxZ

@@ -41,8 +41,8 @@ pub struct BlockState {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Block {
-    pub state: Arc<BlockState>,
     pub position: BlockPosition,
+    pub state: Arc<BlockState>,
 }
 
 
@@ -126,7 +126,7 @@ impl Boundary {
         }
     }
 
-    pub(crate) fn new_from_min_max(min_x: i32, min_y: i32, min_z: i32, max_x: i32, max_y: i32, max_z: i32) -> Self {
+    pub fn new_from_min_max(min_x: i32, min_y: i32, min_z: i32, max_x: i32, max_y: i32, max_z: i32) -> Self {
         Boundary {
             min_x, min_y, min_z,
             d_x: max_x - min_x + 1,
@@ -135,7 +135,7 @@ impl Boundary {
         }
     }
 
-    fn new_from_positions(min: &BlockPosition, max: &BlockPosition) -> Self {
+    pub fn new_from_positions(min: &BlockPosition, max: &BlockPosition) -> Self {
         Boundary {
             min_x: min.x,
             min_y: min.y,
@@ -170,15 +170,15 @@ impl Boundary {
         }
     }
 
-    pub(crate) fn max_x(&self) -> i32 {
+    pub fn max_x(&self) -> i32 {
         self.min_x + self.d_x - 1
     }
 
-    pub(crate) fn max_y(&self) -> i32 {
+    pub fn max_y(&self) -> i32 {
         self.min_y + self.d_y - 1
     }
 
-    pub(crate) fn max_z(&self) -> i32 {
+    pub fn max_z(&self) -> i32 {
         self.min_z + self.d_z - 1
     }
 

@@ -14,9 +14,7 @@ pub struct VXLSchematicOutputStream<W: Write> {
     closed: bool,
     axis_order: AxisOrder,
     boundary: Boundary,
-    written_blocks: usize,
-
-    diff_cache: HashMap<Arc<BlockState>, (i32, String)>,
+    written_blocks: usize
 }
 
 impl<W: Write> SchematicOutputStream for VXLSchematicOutputStream<W> {
@@ -43,8 +41,7 @@ impl<W: Write> VXLSchematicOutputStream<W> {
             header_written: false,
             closed: false,
             axis_order, boundary,
-            written_blocks: 0,
-            diff_cache: HashMap::new(),
+            written_blocks: 0
         }
     }
 
@@ -76,9 +73,9 @@ impl<W: Write> VXLSchematicOutputStream<W> {
         let mut index = 0;
         let end = blocks.len();
         while index < end {
-            let current_block = &blocks[index];
+            let block = &blocks[index];
             let flat_index = self.axis_order.index(
-                &current_block.position,
+                &block.position,
                 &self.boundary
             ) as usize;
             if flat_index < self.written_blocks {
@@ -89,7 +86,7 @@ impl<W: Write> VXLSchematicOutputStream<W> {
             }
             if flat_index > self.written_blocks {
                 let gap = flat_index - self.written_blocks;
-                let air = BlockState::air_arc(); // Assuming this helper exists as used in your snippet
+                let air = BlockState::air_arc();
                 self.write_palette_id_with_rle(&air, gap as i32)?;
                 self.written_blocks += gap;
             }
@@ -98,7 +95,7 @@ impl<W: Write> VXLSchematicOutputStream<W> {
 
             while index + run_length < end {
                 let next_block = &blocks[index + run_length];
-                if next_block.state != current_block.state {
+                if next_block.state != block.state {
                     break;
                 }
                 let next_flat = self.axis_order.index(&next_block.position, &self.boundary) as usize;
@@ -108,7 +105,7 @@ impl<W: Write> VXLSchematicOutputStream<W> {
                 run_length += 1;
             }
 
-            self.write_palette_id_with_rle(&current_block.state, run_length as i32)?;
+            self.write_palette_id_with_rle(&block.state, run_length as i32)?;
 
             index += run_length;
             self.written_blocks += run_length;

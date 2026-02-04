@@ -1,17 +1,14 @@
 package de.richy.voxels;
 
 public class BlockPosition {
-  public static long refCnt = 0;
-
-  private final int x;
-  private final int y;
-  private final int z;
+  private int x;
+  private int y;
+  private int z;
 
   private BlockPosition(int x, int y, int z) {
     this.x = x;
     this.y = y;
     this.z = z;
-    refCnt++;
   }
 
   public int x() {
@@ -24,6 +21,22 @@ public class BlockPosition {
 
   public int z() {
     return z;
+  }
+
+  public void setX(int x) {
+    this.x = x;
+  }
+
+  public void setY(int y) {
+    this.y = y;
+  }
+
+  public void setZ(int z) {
+    this.z = z;
+  }
+
+  public static BlockPosition of(int x, int y, int z) {
+    return new BlockPosition(x, y, z);
   }
   
   public boolean equals(Object o) {
