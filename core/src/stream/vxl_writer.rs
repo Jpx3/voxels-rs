@@ -1,8 +1,8 @@
+use crate::common::{AxisOrder, Block, BlockState, Boundary, Region};
+use crate::stream::SchematicOutputStream;
 use std::collections::HashMap;
 use std::io::Write;
 use std::sync::Arc;
-use crate::common::{AxisOrder, Block, BlockPosition, BlockState, Boundary, Region};
-use crate::stream::SchematicOutputStream;
 
 const MAGIC_NUMBER: i64 = 0x56584C44524D; // "VXLDRM"
 const VERSION: i32 = 1;
@@ -166,10 +166,10 @@ impl<W: Write> VXLSchematicOutputStream<W> {
     fn write_var_int(&mut self, mut value: i32) {
         loop {
             if (value & !0x7F) == 0 {
-                self.writer.write_all(&[value as u8]).map_err(|e| e.to_string());
+                self.writer.write_all(&[value as u8]).map_err(|e| e.to_string()).expect("Failed to write varint");
                 return
             }
-            self.writer.write_all(&[((value & 0x7F) | 0x80) as u8]).map_err(|e| e.to_string());
+            self.writer.write_all(&[((value & 0x7F) | 0x80) as u8]).map_err(|e| e.to_string()).expect("Failed to write varint");
             value >>= 7;
         }
     }
@@ -177,10 +177,10 @@ impl<W: Write> VXLSchematicOutputStream<W> {
     fn write_var_long(&mut self, mut value: i64) {
         loop {
             if (value & !0x7F) == 0 {
-                self.writer.write_all(&[value as u8]).map_err(|e| e.to_string());
+                self.writer.write_all(&[value as u8]).map_err(|e| e.to_string()).expect("Failed to write varlong");
                 return
             }
-            self.writer.write_all(&[((value & 0x7F) | 0x80) as u8]).map_err(|e| e.to_string());
+            self.writer.write_all(&[((value & 0x7F) | 0x80) as u8]).map_err(|e| e.to_string()).expect("Failed to write varlong");
             value >>= 7;
         }
     }

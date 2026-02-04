@@ -5,9 +5,7 @@ public enum SchematicType {
   LITEMATIC("litematic", true),
   MCEDIT("mcedit", true),
   MOJANG("mojang", false),
-  SPONGE_V1("sponge_v1", true),
-  SPONGE_V2("sponge_v2", true),
-  SPONGE_V3("sponge_v3", true),
+  SPONGE("sponge", true),
   UNKNOWN(null, false)
   ;
 

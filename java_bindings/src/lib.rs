@@ -1,14 +1,13 @@
 mod javastreams;
 
-use std::collections::HashMap;
-use std::sync::Arc;
-use robusta_jni::jni::objects::{GlobalRef, JFieldID};
 use robusta_jni::bridge;
 use robusta_jni::convert::{FromJavaValue, Signature, TryFromJavaValue, TryIntoJavaValue};
-use robusta_jni::jni::errors::Error as JniError;
 use robusta_jni::jni::errors::Result as JniResult;
 use robusta_jni::jni::objects::{AutoLocal, JObject};
+use robusta_jni::jni::objects::{GlobalRef, JFieldID};
 use robusta_jni::jni::JNIEnv;
+use std::collections::HashMap;
+use std::sync::Arc;
 use voxels_core::common::{Block, BlockPosition, BlockState, Boundary};
 use voxels_core::stream::{SchematicInputStream, SchematicOutputStream};
 
@@ -148,17 +147,17 @@ fn override_block_position(
 
 #[bridge]
 mod jni {
-    use std::ops::Deref;
+    use super::*;
+    use crate::javastreams::{JavaInputStream, JavaOutputStream};
     use flate2::Compression;
     use robusta_jni::convert::Field;
     use robusta_jni::jni::sys::jlong;
     use voxels_core::common::{AxisOrder, Block};
     use voxels_core::stream::mojang_reader::MojangSchematicInputStream;
     use voxels_core::stream::mojang_writer::MojangSchematicOutputStream;
+    use voxels_core::stream::sponge_reader::SpongeSchematicInputStream;
     use voxels_core::stream::vxl_reader::VXLSchematicInputStream;
     use voxels_core::stream::vxl_writer::VXLSchematicOutputStream;
-    use crate::javastreams::{JavaInputStream, JavaOutputStream};
-    use super::*;
 
     #[derive(Signature, TryIntoJavaValue, TryFromJavaValue, FromJavaValue)]
     #[package(de.richy.voxels)]
@@ -194,6 +193,9 @@ mod jni {
                 "VXL" => {
                     Box::new(VXLSchematicInputStream::new(GzDecoder::new(stream)))
                 },
+                "SPONGE" => {
+                    Box::new(SpongeSchematicInputStream::new(GzDecoder::new(stream)))
+                }
                 _ => {
                     env.throw_new("java/lang/IllegalArgumentException", "Unknown schematic type")?;
                     return Ok(JObject::null());
@@ -474,6 +476,7 @@ mod jni {
 
     #[derive(Signature, TryIntoJavaValue, TryFromJavaValue, FromJavaValue)]
     #[package(de.richy.voxels)]
+    #[allow(dead_code)]
     pub struct Boundary<'env: 'borrow, 'borrow> {
         #[instance]
         raw: AutoLocal<'env, 'borrow>,
@@ -675,25 +678,3 @@ impl JNITranslation for BlockState {
         })
     }
 }
-
-// impl JNITranslation for Block<'_> {
-//     fn to_jni<'env>(&self, env: &JNIEnv<'env>) -> JniResult<JObject<'env>> {
-//         let class = env.find_class("de/richy/voxels/Block")?;
-//         let jposition = self.position.to_jni(env)?;
-//         let jstate = self.state.to_jni(env)?;
-//         let obj = env.new_object(
-//             class,
-//             "(Lde/richy/voxels/BlockPosition;Lde/richy/voxels/BlockState;)V",
-//             &[jposition.into(), jstate.into()],
-//         )?;
-//         Ok(obj)
-//     }
-//
-//     fn from_jni<'env>(env: &JNIEnv<'env>, obj: JObject<'env>) -> JniResult<Self> {
-//         let jposition = env.get_field(obj, "position", "Lde/richy/voxels/BlockPosition;")?.l()?;
-//         let jstate = env.get_field(obj, "state", "Lde/richy/voxels/BlockState;")?.l()?;
-//         let position = BlockPosition::from_jni(env, jposition)?;
-//         let state = BlockState::from_jni(env, jstate)?;
-//         Ok(Block::new(&state, position))
-//     }
-// }

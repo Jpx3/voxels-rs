@@ -4,7 +4,7 @@ use crate::store::paging::Page;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-pub trait BlockStore : Region {
+pub trait BlockStore: Region {
     fn block_at(&self, pos: &BlockPosition) -> Result<Option<Arc<BlockState>>, String>;
     fn set_block_at(&mut self, pos: &BlockPosition, state: Arc<BlockState>) -> Result<(), String>;
     fn remove_block_at(&mut self, pos: BlockPosition) -> Result<(), String>;
@@ -20,13 +20,18 @@ pub trait BlockStore : Region {
         Ok(())
     }
 
-    fn iterate_blocks(&self, axis_order: AxisOrder) -> Box<dyn Iterator<Item=(BlockPosition, Option<Arc<BlockState>>)> + '_> {
-        Box::new(self.iter(axis_order).map(move |pos| {
-            let state = self.block_at(&pos).unwrap_or(None);
-            (pos, state)
-        }).filter(move |(_pos, state)| {
-            state.is_some() && !state.as_ref().unwrap().is_air()
-        }))
+    fn iterate_blocks(
+        &self,
+        axis_order: AxisOrder,
+    ) -> Box<dyn Iterator<Item = (BlockPosition, Option<Arc<BlockState>>)> + '_> {
+        Box::new(
+            self.iter(axis_order)
+                .map(move |pos| {
+                    let state = self.block_at(&pos).unwrap_or(None);
+                    (pos, state)
+                })
+                .filter(move |(_pos, state)| state.is_some() && !state.as_ref().unwrap().is_air()),
+        )
     }
 
     fn _expand_or_throw(&mut self, pos: &BlockPosition) -> Result<(), String> {
@@ -80,7 +85,7 @@ impl Region for SparseBlockStore {
         self.boundary().contains(pos)
     }
 
-    fn iter(&self, axis_order: AxisOrder) -> Box<dyn Iterator<Item=BlockPosition> + '_> {
+    fn iter(&self, axis_order: AxisOrder) -> Box<dyn Iterator<Item = BlockPosition> + '_> {
         self.boundary().iter(axis_order)
     }
 }
@@ -127,49 +132,69 @@ pub struct PagedBlockStore {
     pages: HashMap<i64, Box<dyn Page>>,
     palette: Vec<Arc<BlockState>>,
     reverse_palette: HashMap<Arc<BlockState>, usize>,
-    page_size_x: usize, page_size_y: usize, page_size_z: usize,
-    bits_x: u32, bits_y: u32, bits_z: u32,
-    mask_x: u32, mask_y: u32, mask_z: u32,
+    page_size_x: usize,
+    page_size_y: usize,
+    page_size_z: usize,
+    bits_x: u32,
+    bits_y: u32,
+    bits_z: u32,
+    mask_x: u32,
+    mask_y: u32,
+    mask_z: u32,
     boundary: Boundary,
     fixed_size: bool,
 }
 
 impl PagedBlockStore {
-    fn round_to_power_of_two(n: usize) -> usize {
-        if n.is_power_of_two() {
-            n
-        } else {
-            n.next_power_of_two()
-        }
-    }
-
     pub fn empty_resizable() -> Self {
-        PagedBlockStore::new(Boundary::new(0, 0, 0, 0, 0, 0), 16, 16, 16, false)
+        PagedBlockStore::new(
+            Boundary::new(0, 0, 0, 0, 0, 0),
+            16,
+            16,
+            16,
+            false,
+        )
     }
 
-    pub fn from_boundary(boundary: Boundary, fixed_size: bool) -> Self {
+    pub fn for_boundary(boundary: Boundary, fixed_size: bool) -> Self {
         let page_size_x = ((boundary.d_x() / 8) as usize).max(8);
         let page_size_y = ((boundary.d_y() / 8) as usize).max(8);
         let page_size_z = ((boundary.d_z() / 8) as usize).max(8);
         PagedBlockStore::new(boundary, page_size_x, page_size_y, page_size_z, fixed_size)
     }
 
-    pub fn new(boundary: Boundary, page_size_x: usize, page_size_y: usize, page_size_z: usize, fixed_size: bool) -> Self {
-        let bits_x = (Self::round_to_power_of_two(page_size_x) as u32).trailing_zeros();
-        let bits_y = (Self::round_to_power_of_two(page_size_y) as u32).trailing_zeros();
-        let bits_z = (Self::round_to_power_of_two(page_size_z) as u32).trailing_zeros();
+    pub fn new(
+        boundary: Boundary,
+        req_page_size_x: usize,
+        req_page_size_y: usize,
+        req_page_size_z: usize,
+        fixed_size: bool,
+    ) -> Self {
+        let bits_x = (Self::round_to_power_of_two(req_page_size_x) as u32).trailing_zeros();
+        let bits_y = (Self::round_to_power_of_two(req_page_size_y) as u32).trailing_zeros();
+        let bits_z = (Self::round_to_power_of_two(req_page_size_z) as u32).trailing_zeros();
         let mask_x = (1u32 << bits_x) - 1;
         let mask_y = (1u32 << bits_y) - 1;
         let mask_z = (1u32 << bits_z) - 1;
+        let page_size_x = 1usize << bits_x;
+        let page_size_y = 1usize << bits_y;
+        let page_size_z = 1usize << bits_z;
 
         PagedBlockStore {
             pages: HashMap::new(),
             palette: Vec::new(),
             reverse_palette: HashMap::new(),
-            page_size_x, page_size_y, page_size_z,
-            bits_x, bits_y, bits_z,
-            mask_x, mask_y, mask_z,
-            boundary, fixed_size,
+            page_size_x,
+            page_size_y,
+            page_size_z,
+            bits_x,
+            bits_y,
+            bits_z,
+            mask_x,
+            mask_y,
+            mask_z,
+            boundary,
+            fixed_size,
         }
     }
 
@@ -183,6 +208,14 @@ impl PagedBlockStore {
             index
         }
     }
+
+    fn round_to_power_of_two(n: usize) -> usize {
+        if n.is_power_of_two() {
+            n
+        } else {
+            n.next_power_of_two()
+        }
+    }
 }
 
 impl Region for PagedBlockStore {
@@ -190,7 +223,7 @@ impl Region for PagedBlockStore {
         self.boundary().contains(pos)
     }
 
-    fn iter(&self, axis_order: AxisOrder) -> Box<dyn Iterator<Item=BlockPosition> + '_> {
+    fn iter(&self, axis_order: AxisOrder) -> Box<dyn Iterator<Item = BlockPosition> + '_> {
         Box::new(self.boundary().iter(axis_order))
     }
 }
@@ -274,7 +307,8 @@ pub struct LazyPaletteBlockStoreWrapper {
 }
 
 fn temp_state_from_temp_id(
-    temp_palette: &mut HashMap<isize, Arc<BlockState>>, id: isize
+    temp_palette: &mut HashMap<isize, Arc<BlockState>>,
+    id: isize,
 ) -> Arc<BlockState> {
     if !temp_palette.contains_key(&id) {
         let unknown_state = BlockState::new(
@@ -291,21 +325,22 @@ impl Region for LazyPaletteBlockStoreWrapper {
         self.inner.contains(pos)
     }
 
-    fn iter(&self, axis_order: AxisOrder) -> Box<dyn Iterator<Item=BlockPosition> + '_> {
+    fn iter(&self, axis_order: AxisOrder) -> Box<dyn Iterator<Item = BlockPosition> + '_> {
         self.inner.iter(axis_order)
     }
 }
 
 impl LazyPaletteBlockStoreWrapper {
-    pub fn empty_resizable() -> Self {
-        LazyPaletteBlockStoreWrapper::from(Box::new(PagedBlockStore::empty_resizable()))
+    pub fn empty_resizable_from_size(size_x: usize, size_y: usize, size_z: usize) -> Self {
+        let boundary = Boundary::new(0, 0, 0, size_x as i32, size_y as i32, size_z as i32);
+        LazyPaletteBlockStoreWrapper::from(Box::new(PagedBlockStore::for_boundary(
+            boundary, false,
+        )))
     }
 
-    pub fn empty_resizable_from_size(
-        size_x: usize, size_y: usize, size_z: usize
-    ) -> Self {
+    pub fn empty_fixed_from_size(size_x: usize, size_y: usize, size_z: usize) -> Self {
         let boundary = Boundary::new(0, 0, 0, size_x as i32, size_y as i32, size_z as i32);
-        LazyPaletteBlockStoreWrapper::from(Box::new(PagedBlockStore::from_boundary(boundary, false)))
+        LazyPaletteBlockStoreWrapper::from(Box::new(PagedBlockStore::for_boundary(boundary, true)))
     }
 
     pub fn from(inner: Box<dyn BlockStore>) -> Self {
@@ -322,7 +357,9 @@ impl LazyPaletteBlockStoreWrapper {
             Some(ref palette) => {
                 if let Some(state) = self.inner.block_at(pos)? {
                     let id_str = &state.properties[0].1;
-                    let id: isize = id_str.parse().map_err(|_| "Invalid temporary ID".to_string())?;
+                    let id: isize = id_str
+                        .parse()
+                        .map_err(|_| "Invalid temporary ID".to_string())?;
                     if let Some(actual_state) = palette.get(&id) {
                         Ok(Some(actual_state.clone()))
                     } else {
@@ -340,7 +377,13 @@ impl LazyPaletteBlockStoreWrapper {
         self.inner.set_block_at(pos, state)
     }
 
-    pub fn set_unknown_block_at(&mut self, x: i32, y: i32, z: i32, state: isize) -> Result<(), String> {
+    pub fn set_unknown_block_at(
+        &mut self,
+        x: i32,
+        y: i32,
+        z: i32,
+        state: isize,
+    ) -> Result<(), String> {
         let pos = BlockPosition { x, y, z };
         let block_state = temp_state_from_temp_id(&mut self.temp_palette, state);
         self.inner.set_block_at(&pos, block_state)
@@ -409,8 +452,6 @@ mod tests {
         assert_eq!(positions, expected_positions);
     }
 
-
-
     #[test]
     fn test_sparse_block_store() {
         let boundary = Boundary::new(0, 0, 0, 10, 10, 10);
@@ -428,10 +469,12 @@ mod tests {
     #[test]
     fn test_paged_block_store() {
         let boundary = Boundary::new(0, 0, 0, 32, 32, 32);
-        let mut store = PagedBlockStore::from_boundary(boundary, true);
+        let mut store = PagedBlockStore::for_boundary(boundary, true);
         let pos = BlockPosition { x: 5, y: 5, z: 5 };
         let state = Arc::from(BlockState::from_str("dirt".to_string()).unwrap());
-        store.set_block_at(&pos, state.clone()).expect("Failed to set block");
+        store
+            .set_block_at(&pos, state.clone())
+            .expect("Failed to set block");
         let retrieved = store.block_at(&pos).unwrap().unwrap();
         assert_eq!(retrieved, state.clone());
         store.remove_block_at(pos.clone()).unwrap();
@@ -455,5 +498,18 @@ mod tests {
         lazy_store.remove_block_at(pos.clone()).unwrap();
         let retrieved = lazy_store.block_at(&pos).unwrap();
         assert!(retrieved.is_none());
+    }
+
+    #[test]
+    fn test_large_page_store() {
+        let boundary = Boundary::new(0, 0, 0, 167, 41, 125);
+        let mut store = PagedBlockStore::for_boundary(boundary, true);
+        let pos = BlockPosition { x: 0, y: 0, z: 15 };
+        let state = Arc::from(BlockState::from_str("sand".to_string()).unwrap());
+        store
+            .set_block_at(&pos, state.clone())
+            .expect("Failed to set block");
+        let retrieved = store.block_at(&pos).unwrap().unwrap();
+        assert_eq!(retrieved, state.clone());
     }
 }

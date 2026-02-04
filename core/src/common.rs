@@ -1,4 +1,3 @@
-use crate::store::blockstore::BlockStore;
 use std::collections::HashMap;
 use std::string::ToString;
 use std::sync::{Arc, OnceLock};
@@ -46,9 +45,6 @@ pub struct Block {
     pub position: BlockPosition,
 }
 
-pub struct Schematic {
-    block_store: dyn BlockStore,
-}
 
 pub trait Region {
     fn contains(&self, pos: &BlockPosition) -> bool;
@@ -120,28 +116,19 @@ impl AxisOrder {
 
 impl Boundary {
     pub fn new(min_x: i32, min_y: i32, min_z: i32, d_x: i32, d_y: i32, d_z: i32) -> Self {
-        Boundary {
-            min_x, min_y, min_z,
-            d_x, d_y, d_z,
-        }
+        Boundary { min_x, min_y, min_z, d_x, d_y, d_z, }
     }
 
     pub fn new_empty() -> Self {
         Boundary {
-            min_x: 0,
-            min_y: 0,
-            min_z: 0,
-            d_x: 0,
-            d_y: 0,
-            d_z: 0,
+            min_x: 0, min_y: 0, min_z: 0,
+            d_x: 0, d_y: 0, d_z: 0,
         }
     }
 
     pub(crate) fn new_from_min_max(min_x: i32, min_y: i32, min_z: i32, max_x: i32, max_y: i32, max_z: i32) -> Self {
         Boundary {
-            min_x,
-            min_y,
-            min_z,
+            min_x, min_y, min_z,
             d_x: max_x - min_x + 1,
             d_y: max_y - min_y + 1,
             d_z: max_z - min_z + 1,

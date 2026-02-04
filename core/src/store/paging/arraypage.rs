@@ -43,7 +43,7 @@ impl Page for ArrayPage {
     }
 
     fn store(&mut self, x: i32, y: i32, z: i32, state: usize) -> Result<(), String> {
-        let idx = self.index(x, y, z).ok_or("Index out of bounds")?;
+        let idx = self.index(x, y, z).ok_or(format!("Out of bounds: ({}, {}, {})", x, y, z))?;
         let current = self.data[idx];
         if current == 0 {
             self.nnz += 1;
@@ -53,7 +53,7 @@ impl Page for ArrayPage {
     }
 
     fn erase(&mut self, x: i32, y: i32, z: i32) -> Result<(), String> {
-        let idx = self.index(x, y, z).ok_or("Index out of bounds")?;
+        let idx = self.index(x, y, z).ok_or(format!("Out of bounds: ({}, {}, {})", x, y, z))?;
         let current = self.data[idx];
         if current != 0 {
             self.nnz -= 1;

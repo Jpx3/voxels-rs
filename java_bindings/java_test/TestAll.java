@@ -11,17 +11,26 @@ import java.io.FileOutputStream;
 
 public class TestAll {
     public static void main(String[] args) {
+//         try (
+//             InputStream is = new FileInputStream("C:\\Users\\strun\\RustroverProjects\\voxels-rs\\test_data\\mojang.schem");
+//             OutputStream os = new FileOutputStream("C:\\Users\\strun\\RustroverProjects\\voxels-rs\\test_data\\mojang.vxl");
+//         ) {
+//             moveMojangToVXL(is, os);
+//         } catch (Exception e) {
+//             e.printStackTrace();
+//         }
         try (
-            InputStream is = new FileInputStream("C:\\Users\\strun\\RustroverProjects\\voxels-rs\\test_data\\mojang.schem");
-            OutputStream os = new FileOutputStream("C:\\Users\\strun\\RustroverProjects\\voxels-rs\\test_data\\mojang.vxl");
+            InputStream is = new FileInputStream("C:\\Users\\strun\\RustroverProjects\\voxels-rs\\test_data\\sponge3.schem");
+            OutputStream os = new FileOutputStream("C:\\Users\\strun\\RustroverProjects\\voxels-rs\\test_data\\sponge3.vxl");
         ) {
-            pullBlocks(is, os);
+//             readSponge(is);
+            moveSpongeToVXL(is, os);
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    static void pullBlocks(InputStream is, OutputStream os) throws Exception {
+    static void moveMojangToVXL(InputStream is, OutputStream os) throws Exception {
         try(
           BlockInputStream bis = Voxels.blocksFromBytes(is, SchematicType.MOJANG);
         ) {
@@ -44,6 +53,49 @@ public class TestAll {
           }
 //             System.out.println("BlockState RefCnt: " + de.richy.voxels.BlockState.ref_cnt);
 //             System.out.println("BlockPosition RefCnt: " + de.richy.voxels.BlockPosition.refCnt);
+        }
+    }
+
+
+    static void readSponge(InputStream is) throws Exception {
+        try(
+          BlockInputStream bis = Voxels.blocksFromBytes(is, SchematicType.SPONGE);
+        ) {
+          Boundary boundary = bis.boundary();
+          long start = System.currentTimeMillis();
+          Block[] buffer = new Block[512];
+          int read;
+          int count = 0;
+          while ((read = bis.read(buffer)) != -1) {
+            for (int i = 0; i < read; i++) {
+              Block b = buffer[i];
+//               System.out.printf("JAVA Block at (%d, %d, %d): id=%s, data=%s%n", b.position().x(), b.position().y(), b.position().z(), b.state().typeName(), b.state().properties());
+            count++;
+            }
+          }
+          long end = System.currentTimeMillis();
+          System.out.println("Time taken: " + (end - start) + " ms for " + count + " blocks");
+
+        }
+    }
+
+    static void moveSpongeToVXL(InputStream is, OutputStream os) throws Exception {
+        try(
+          BlockInputStream bis = Voxels.blocksFromBytes(is, SchematicType.SPONGE);
+        ) {
+          Boundary boundary = bis.boundary();
+          try(
+            BlockOutputStream bos = Voxels.blocksToBytes(os, SchematicType.VXL, boundary);
+          ) {
+            long start = System.currentTimeMillis();
+            Block[] buffer = new Block[512];
+            int read;
+            while ((read = bis.read(buffer)) != -1) {
+              bos.write(buffer, 0, read);
+            }
+            long end = System.currentTimeMillis();
+            System.out.println("Time taken: " + (end - start) + " ms");
+            }
         }
     }
 }

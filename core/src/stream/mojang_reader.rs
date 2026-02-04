@@ -1,7 +1,6 @@
 use crate::common::{AxisOrder, Block, BlockState, Boundary, Region};
-use crate::store::blockstore::BlockStore;
 use crate::store::blockstore::LazyPaletteBlockStoreWrapper;
-use crate::store::blockstore::PagedBlockStore;
+
 use crate::stream::SchematicInputStream;
 use fastnbt::stream::{Parser, Value};
 use fastnbt::Tag;
@@ -179,7 +178,7 @@ impl<R: std::io::Read> MojangSchematicInputStream<R> {
                             } else if let (Some(name), Tag::Compound) = (name, typus) {
                                 if self.lazy_palette.blocks.is_none() {
                                     self.lazy_palette.blocks = Some(
-                                        LazyPaletteBlockStoreWrapper::empty_resizable_from_size(
+                                        LazyPaletteBlockStoreWrapper::empty_fixed_from_size(
                                             self.size_x, self.size_y, self.size_z
                                         )
                                     );
@@ -346,6 +345,8 @@ impl<R: std::io::Read> MojangSchematicInputStream<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::store::blockstore::BlockStore;
+    use crate::store::blockstore::PagedBlockStore;
     use flate2::read::GzDecoder;
     use std::fs::File;
     use std::io::BufReader;
