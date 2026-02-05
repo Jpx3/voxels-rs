@@ -1,6 +1,5 @@
 use crate::common::{AxisOrder, Block, BlockPosition, BlockState, Boundary, Region};
-use crate::store::paging::arraypage::ArrayPage;
-use crate::store::paging::Page;
+use crate::store::paging::{ArrayPage, Page};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -155,7 +154,7 @@ impl PagedBlockStore {
             false,
         )
     }
-    
+
     pub fn new_for_fixed_boundary(boundary: Boundary) -> Self {
         PagedBlockStore::new_for_boundary(boundary, true)
     }
@@ -407,6 +406,8 @@ impl LazyPaletteBlockStoreWrapper {
 mod tests {
     use super::*;
     use crate::common::{BlockPosition, BlockState, Boundary};
+    use rand::{Rng, SeedableRng};
+    use rand_chacha::ChaCha8Rng;
 
     #[test]
     fn test_region_iter_sparse() {
@@ -508,12 +509,28 @@ mod tests {
     fn test_large_page_store() {
         let boundary = Boundary::new(0, 0, 0, 167, 41, 125);
         let mut store = PagedBlockStore::new_for_boundary(boundary, true);
-        let pos = BlockPosition { x: 0, y: 0, z: 15 };
-        let state = Arc::from(BlockState::from_string("sand".to_string()).unwrap());
-        store
-            .set_block_at(&pos, state.clone())
-            .expect("Failed to set block");
-        let retrieved = store.block_at(&pos).unwrap().unwrap();
-        assert_eq!(retrieved, state.clone());
+        for x in 0..167 {
+            for y in 0..41 {
+                for z in 0..125 {
+                    let mut rng = ChaCha8Rng::seed_from_u64((x as u64) << 32 | (y as u64) << 16 | (z as u64));
+                    let number = rng.next_u32() % 100;
+                    let pos = BlockPosition { x, y, z };
+                    let state = Arc::from(BlockState::from_string(format!("{}", number)).unwrap());
+                    store.set_block_at(&pos, state.clone()).unwrap();
+                }
+            }
+        }
+        for x in 0..167 {
+            for y in 0..41 {
+                for z in 0..125 {
+                    let mut rng = ChaCha8Rng::seed_from_u64((x as u64) << 32 | (y as u64) << 16 | (z as u64));
+                    let number = rng.next_u32() % 100;
+                    let pos = BlockPosition { x, y, z };
+                    let expected_state = Arc::from(BlockState::from_string(format!("{}", number)).unwrap());
+                    let retrieved_state = store.block_at(&pos).unwrap().unwrap();
+                    assert_eq!(retrieved_state, expected_state);
+                }
+            }
+        }
     }
 }

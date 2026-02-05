@@ -1,5 +1,5 @@
 use crate::common::{AxisOrder, Block, BlockState, Boundary, Region};
-use crate::stream::SchematicInputStream;
+use crate::stream::stream::SchematicInputStream;
 use std::cmp::min;
 use std::collections::HashMap;
 use std::io::Read;
@@ -222,7 +222,7 @@ mod tests {
     use std::io::Cursor;
     use std::sync::Arc;
     use crate::common::{AxisOrder, Block, BlockState, Boundary, Region};
-    use crate::stream::SchematicInputStream;
+    use crate::stream::stream::SchematicInputStream;
     use super::VXLSchematicInputStream;
 
     #[test]

@@ -19,6 +19,14 @@ public class Voxels {
 
   public static native BlockInputStream blocksFromBytes(InputStream inputStream, SchematicType schematicType);
 
+  public static BlockOutputStream bytesFromBlocks(OutputStream outputStream) {
+    return blocksToBytes(outputStream, SchematicType.VXL);
+  }
+
+  public static BlockOutputStream bytesFromBlocks(OutputStream outputStream, SchematicType schematicType) {
+    return blocksToBytes(outputStream, schematicType);
+  }
+
   public static BlockOutputStream blocksToBytes(OutputStream outputStream, Boundary boundary) {
     return blocksToBytes(outputStream, SchematicType.VXL);
   }

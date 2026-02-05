@@ -1,2 +1,2 @@
 pub(crate) mod blockstore;
-mod paging;
+pub(crate) mod paging;

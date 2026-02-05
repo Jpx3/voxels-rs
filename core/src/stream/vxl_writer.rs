@@ -1,5 +1,5 @@
 use crate::common::{AxisOrder, Block, BlockState, Boundary};
-use crate::stream::SchematicOutputStream;
+use crate::stream::stream::SchematicOutputStream;
 use std::collections::HashMap;
 use std::io::Write;
 use std::sync::Arc;
@@ -217,7 +217,7 @@ mod test{
     use std::io::{Cursor, Read};
     use std::sync::Arc;
     use crate::common::{AxisOrder, Block, BlockPosition, BlockState, Boundary, Region};
-    use crate::stream::SchematicOutputStream;
+    use crate::stream::stream::SchematicOutputStream;
 
     #[test]
     fn test_vxl_writer() {

@@ -43,39 +43,6 @@ public record Boundary(
       newMaxZ - newMinZ + 1
     );
   }
-  
-  public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
-    Boundary boundary = (Boundary) o;
-    return minX == boundary.minX &&
-      minY == boundary.minY &&
-      minZ == boundary.minZ &&
-      dX == boundary.dX &&
-      dY == boundary.dY &&
-      dZ == boundary.dZ;
-  }
-  
-  public int hashCode() {
-    int result = Integer.hashCode(minX);
-    result = 31 * result + Integer.hashCode(minY);
-    result = 31 * result + Integer.hashCode(minZ);
-    result = 31 * result + Integer.hashCode(dX);
-    result = 31 * result + Integer.hashCode(dY);
-    result = 31 * result + Integer.hashCode(dZ);
-    return result;
-  }
-  
-  public String toString() {
-    return "Boundary{" +
-        "minX=" + minX +
-        ", minY=" + minY +
-        ", minZ=" + minZ +
-        ", dX=" + dX +
-        ", dY=" + dY +
-        ", dZ=" + dZ +
-        '}';
-  }
 
   public static Boundary fromMinAndMax(
     int minX, int minY, int minZ,

@@ -1,5 +1,5 @@
 use crate::common::{AxisOrder, Block, BlockState, Boundary, Region};
-use crate::stream::SchematicOutputStream;
+use crate::stream::stream::SchematicOutputStream;
 use fastnbt::{ByteArray, IntArray, Value};
 use std::collections::HashMap;
 use std::fmt::Debug;

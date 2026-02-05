@@ -1,11 +1,11 @@
 use crate::common::{AxisOrder, Block, BlockState, Boundary, Region};
 use crate::store::blockstore::LazyPaletteBlockStoreWrapper;
-use crate::stream::SchematicInputStream;
 use fastnbt::Value;
 use std::collections::HashMap;
 use std::io::Read;
 use std::ops::Deref;
 use std::sync::Arc;
+use crate::stream::stream::SchematicInputStream;
 
 pub struct SpongeSchematicInputStream<R: Read> {
     reader: R,

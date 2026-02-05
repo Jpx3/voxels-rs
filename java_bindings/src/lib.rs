@@ -1,4 +1,4 @@
-mod javastreams;
+mod jstreams;
 
 use robusta_jni::bridge;
 use robusta_jni::convert::{FromJavaValue, Signature, TryFromJavaValue, TryIntoJavaValue};
@@ -9,7 +9,7 @@ use robusta_jni::jni::JNIEnv;
 use std::collections::HashMap;
 use std::sync::Arc;
 use voxels_core::common::{Block, BlockPosition, BlockState, Boundary};
-use voxels_core::stream::{SchematicInputStream, SchematicOutputStream};
+use voxels_core::stream::stream::{SchematicInputStream, SchematicOutputStream};
 
 pub struct BlockInputStreamHandle {
     pub sis: Box<dyn SchematicInputStream>,
@@ -149,7 +149,7 @@ fn override_block_position(
 mod jni {
 
 use std::io::{BufReader, BufWriter};use super::*;
-    use crate::javastreams::{JavaInputStream, JavaOutputStream};
+    use crate::jstreams::{JavaInputStream, JavaOutputStream};
     use flate2::Compression;
     use robusta_jni::convert::Field;
     use robusta_jni::jni::sys::jlong;

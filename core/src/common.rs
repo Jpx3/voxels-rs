@@ -401,11 +401,13 @@ impl BlockState {
         if self.properties.is_empty() {
             self.name.clone()
         } else {
-            let props: Vec<String> = self
+            let mut props: Vec<String> = self
                 .properties
                 .iter()
                 .map(|(k, v)| format!("{}={}", k, v))
+                // sort by key alphabetically for consistent output
                 .collect();
+            props.sort();
             format!("{}[{}]", self.name, props.join(","))
         }
     }
