@@ -27,6 +27,10 @@ impl PyBlock {
         self.state.clone().into()
     }
 
+    pub fn __repr__(&self) -> String {
+        self.__str__()
+    }
+
     pub fn __str__(&self) -> String {
         format!("Block at {} with state {}", self.position().__str__(), self.state().__str__())
     }
@@ -78,19 +82,19 @@ impl PyBlockPosition {
     pub fn __str__(&self) -> String {
         format!("({}, {}, {})", self.x, self.y, self.z)
     }
-    
+
     pub fn __repr__(&self) -> String {
         self.__str__()
     }
-    
+
     pub fn x(&self) -> i32 {
         self.x
     }
-    
+
     pub fn y(&self) -> i32 {
         self.y
     }
-    
+
     #[getter]
     pub fn z(&self) -> i32 {
         self.z
