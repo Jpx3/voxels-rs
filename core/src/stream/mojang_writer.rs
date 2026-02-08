@@ -50,8 +50,6 @@ struct StructureData {
     palette: Vec<PaletteEntry>,
     #[serde(rename = "blocks")]
     blocks: Vec<BlockEntry>,
-    // #[serde(rename = "entities")]
-    // entities: Vec<()>,
 }
 
 #[derive(Serialize)]

@@ -1,10 +1,9 @@
 use crate::common::{AxisOrder, Block, BlockState, Boundary, Region};
+use crate::store::blockstore::{BlockStore, PagedBlockStore};
 use crate::stream::stream::SchematicOutputStream;
 use fastnbt::{ByteArray, IntArray, Value};
 use std::collections::HashMap;
-use std::fmt::Debug;
 use std::io::Write;
-use crate::store::blockstore::{BlockStore, PagedBlockStore};
 
 pub struct SpongeSchematicOutputStream<W: Write> {
     writer: W,

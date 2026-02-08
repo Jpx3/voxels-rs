@@ -77,6 +77,9 @@ impl<R: Read> SpongeSchematicInputStream<R> {
     fn read_header(&mut self) -> Result<(), String> {
         let result: Value = fastnbt::from_reader(&mut self.reader).map_err(|e| format!("Sponge: Failed to read NBT data: {}", e))?;
         if let Value::Compound(root) = result {
+            if !root.contains_key("Schematic") {
+                return Err("Sponge: Missing 'Schematic' tag".into());
+            }
             let schematic_value = &root["Schematic"];
             if let Value::Compound(schematic) = schematic_value {
                 let height = match schematic.get("Height") {
@@ -204,5 +207,72 @@ impl<R: Read> SpongeSchematicInputStream<R> {
             integers.push(value);
         }
         Ok(integers)
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use flate2::read::GzDecoder;
+    use crate::common::{Block, BlockPosition, BlockState};
+    use crate::stream::sponge_reader::SpongeSchematicInputStream;
+    use crate::stream::stream::SchematicInputStream;
+
+    fn create_test_schematic() -> Vec<Block> {
+        let mut blocks = Vec::new();
+        let trunk_x = 8;
+        let trunk_z = 8;
+        let trunk_height = 5;
+        let leaf_start = 3;
+        for x in 0..16 {
+            for y in 0..16 {
+                for z in 0..16 {
+                    let dx = (x as i32 - trunk_x).abs();
+                    let dz = (z as i32 - trunk_z).abs();
+                    let dist_sq = dx * dx + dz * dz;
+                    let mut block_state = BlockState::air();
+                    if dx == 0 && dz == 0 && y < trunk_height {
+                        block_state = BlockState::from_string(format!("minecraft:oak_log[axis={}]", ["y", "x", "z"][y as usize % 3])).unwrap();
+                    } else if y >= leaf_start && y <= trunk_height + 1 {
+                        let radius = if y == trunk_height + 1 { 2 } else { 3 };
+                        if dist_sq < radius * radius && !(dx == radius - 1 && dz == radius - 1) {
+                            block_state = BlockState::from_string("minecraft:oak_leaves[distance=1,persistent=true]".to_string()).unwrap();
+                        }
+                    }
+                    if !block_state.is_air() {
+                        blocks.push(Block {
+                            position: BlockPosition::new(x, y, z),
+                            state: Arc::new(block_state),
+                        });
+                    }
+                }
+            }
+        }
+        blocks
+    }
+
+    #[test]
+    fn test_sponge_reader() {
+        const TREE_SCHEMATIC: &[u8] = include_bytes!("test_schematics/tree.sponge");
+        let reader = std::io::Cursor::new(TREE_SCHEMATIC);
+        let reader = GzDecoder::new(reader);
+        let mut sponge_reader = SpongeSchematicInputStream::new(reader);
+        let read_blocks = sponge_reader.read_to_end_into_vec().unwrap();
+        let expected_blocks = create_test_schematic();
+        assert_eq!(read_blocks.len(), expected_blocks.len());
+        for expected in expected_blocks.clone() {
+            let found = read_blocks.iter().find(|b| b.position == expected.position);
+            assert!(found.is_some(), "Expected block at position {:?} not found", expected.position);
+            let found_block = found.unwrap();
+            assert_eq!(found_block.state.name(), expected.state.name(), "Block state name mismatch at position {:?}", expected.position);
+            assert_eq!(found_block.state.properties(), expected.state.properties(), "Block state properties mismatch at position {:?}", expected.position);
+        }
+
+        for block in read_blocks {
+            let expected = expected_blocks.iter().find(|b| b.position == block.position).unwrap();
+            assert_eq!(block.state.name(), expected.state.name(), "Block state name mismatch at position {:?}", block.position);
+            assert_eq!(block.state.properties(), expected.state.properties(), "Block state properties mismatch at position {:?}", block.position);
+        }
     }
 }

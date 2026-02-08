@@ -217,6 +217,14 @@ impl<R: Read> VXLSchematicInputStream<R> {
     }
 }
 
+pub fn probe_vxl_uncompressed<R: Read>(block: &[u8]) -> bool {
+    if block.len() < 6 {
+        return false;
+    }
+    let magic = ((block[0] as i64) << 40) | ((block[1] as i64) << 32) | ((block[2] as i64) << 24) | ((block[3] as i64) << 16) | ((block[4] as i64) << 8) | (block[5] as i64);
+    magic == MAGIC_NUMBER
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::Cursor;

@@ -7,7 +7,16 @@ pub trait SchematicInputStream {
     /// Returns the number of blocks read, or `None` if the end of the stream is reached.
     fn read(& mut self, buffer: &mut Vec<Block>, offset: usize, length: usize)
             -> Result<Option<usize>, String>;
-
+    
+    fn read_next(&mut self, limit: usize) -> Result<Option<Vec<Block>>, String> {
+        let mut buffer = Vec::with_capacity(limit);
+        if let Some(read_blocks) = self.read(&mut buffer, 0, limit)? {
+            Ok(Some(buffer))
+        } else {
+            Ok(None)
+        }
+    }
+    
     /// Reads all blocks from the input stream into the given BlockStore.
     /// This method handles buffering internally for efficiency.
     fn read_to_end(&mut self, store: &mut dyn BlockStore) -> Result<(), String> {
@@ -20,6 +29,22 @@ pub trait SchematicInputStream {
             }
         }
         Ok(())
+    }
+
+    /// Reads all blocks from the input stream into a Vec<Block>.
+    /// This method handles buffering internally for efficiency.
+    /// Note: This can consume a lot of memory for large schematics, so use with caution.
+    fn read_to_end_into_vec(&mut self) -> Result<Vec<Block>, String> {
+        let mut blocks = Vec::new();
+        loop {
+            let mut chunk = Vec::new();
+            if let Some(read_blocks) = self.read(&mut chunk, 0, 4096)? {
+                blocks.extend(chunk);
+            } else {
+                break;
+            }
+        }
+        Ok(blocks)
     }
 
     /// Retrieves the boundary information of the schematic, if available.

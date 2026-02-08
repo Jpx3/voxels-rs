@@ -1,12 +1,14 @@
 [package]
-name = "voxels_python"
+name = "voxels_rs"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "voxels_python"
+name = "voxels_rs"
 crate-type = ["cdylib"]
 
 [dependencies]
 voxels_core = { path = "../core" }
-pyo3 = { version = "0.27.2", features = ["extension-module"] }
+pyo3 = { version = "0.28.0", features = ["extension-module"] }
+flate2 = "1.1.8"
+numpy = "0.28.0"

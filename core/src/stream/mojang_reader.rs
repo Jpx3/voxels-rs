@@ -46,7 +46,7 @@ impl<R: std::io::Read> SchematicInputStream for MojangSchematicInputStream<R> {
 
         let wrapper = match &self.lazy_palette.blocks {
             Some(w) => w,
-            None => return Ok(None),
+            None => return Err("Blocks not initialized".into()),
         };
 
         let iter = wrapper
@@ -87,19 +87,25 @@ impl<R: std::io::Read> SchematicInputStream for MojangSchematicInputStream<R> {
 
 impl<R: std::io::Read> MojangSchematicInputStream<R> {
     fn read_schematic_header(&mut self) -> Result<(), String> {
+        let mut palette_found = false;
+        let mut blocks_found = false;
+        let mut size_found = false;
         loop {
             match self.parser.next() {
                 Ok(Value::List(Some(name), tag, len)) => match name.to_lowercase().as_str() {
                     "size" if tag == Tag::Int && len == 3 => {
                         self.size = poll_size(&mut self.parser)?;
+                        size_found = true;
                     }
                     "palette" if tag == Tag::Compound => {
                         self.ensure_blocks_initialized();
                         self.extract_palette_from_nbt_stream()?;
+                        palette_found = true;
                     }
                     "blocks" if tag == Tag::Compound => {
                         self.ensure_blocks_initialized();
                         self.read_blocks_from_nbt_stream()?;
+                        blocks_found = true;
                     }
                     _ => {}
                 },
@@ -108,6 +114,18 @@ impl<R: std::io::Read> MojangSchematicInputStream<R> {
                 Err(e) if e.is_eof() => break,
                 Err(e) => return Err(format!("NBT Stream Error: {}", e)),
             }
+        }
+        if !size_found {
+            return Err("Mojang: Size not found in header".into());
+        }
+        if !palette_found {
+            return Err("Mojang: Palette not found in header".into());
+        }
+        if !blocks_found {
+            return Err("Mojang: Blocks not found in header".into());
+        }
+        if self.lazy_palette.blocks.is_none() {
+            return Err("Mojang: Blocks not initialized after header parsing".into());
         }
         Ok(())
     }

@@ -154,6 +154,7 @@ use std::io::{BufReader, BufWriter};use super::*;
     use robusta_jni::convert::Field;
     use robusta_jni::jni::sys::jlong;
     use voxels_core::common::{AxisOrder, Block};
+    use voxels_core::stream::any_reader::AnySchematicInputStream;
     use voxels_core::stream::mojang_reader::MojangSchematicInputStream;
     use voxels_core::stream::mojang_writer::MojangSchematicOutputStream;
     use voxels_core::stream::sponge_reader::SpongeSchematicInputStream;
@@ -174,7 +175,6 @@ use std::io::{BufReader, BufWriter};use super::*;
             input_stream: JObject<'env>,
             schematic_type: JObject<'env>,
         ) -> JniResult<JObject<'env>> {
-
             if input_stream.is_null() {
                 env.throw_new("java/lang/NullPointerException", "Input stream is null")?;
                 return Ok(JObject::null());
@@ -191,22 +191,24 @@ use std::io::{BufReader, BufWriter};use super::*;
             use flate2::read::GzDecoder;
             let sis: Box<dyn SchematicInputStream> = match schematic_type_str.as_str() {
                 "MOJANG" => {
-                    Box::new(MojangSchematicInputStream::new(GzDecoder::new(stream)))
+                    Box::new(MojangSchematicInputStream::new(
+                        BufReader::new(GzDecoder::new(stream))
+                    ))
                 },
                 "VXL" => {
                     Box::new(VXLSchematicInputStream::new(
-                        BufReader::new(
-                            GzDecoder::new(stream)
-                            // stream
-                        ),
+                        BufReader::new(GzDecoder::new(stream))
                     ))
                 },
                 "SPONGE" => {
-                    Box::new(SpongeSchematicInputStream::new(GzDecoder::new(stream)))
+                    Box::new(SpongeSchematicInputStream::new(
+                        BufReader::new(GzDecoder::new(stream))
+                    ))
                 }
                 _ => {
-                    env.throw_new("java/lang/IllegalArgumentException", "Unknown schematic type")?;
-                    return Ok(JObject::null());
+                    Box::new(AnySchematicInputStream::new_from_known(
+                        BufReader::new(GzDecoder::new(stream))
+                    ))
                 }
             };
             let boxedHandle = Box::new(

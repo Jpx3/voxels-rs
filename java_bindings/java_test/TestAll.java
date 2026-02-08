@@ -7,9 +7,10 @@ public class TestAll {
 
   public static void main(String[] args) throws IOException {
     writeTreeSchematic();
-    convert("tree.schematic", SchematicType.MOJANG, "tree.vxl", SchematicType.VXL);
-    convert("tree.vxl", SchematicType.VXL, "tree.schem", SchematicType.SPONGE);
-    convert("tree.schem", SchematicType.SPONGE, "tree_mojang.schematic", SchematicType.MOJANG);
+    writeSpongeSchematic();
+//     convert("tree.schematic", SchematicType.MOJANG, "tree.vxl", SchematicType.VXL);
+//     convert("tree.vxl", SchematicType.VXL, "tree.schem", SchematicType.SPONGE);
+//     convert("tree.schem", SchematicType.SPONGE, "tree_mojang.schematic", SchematicType.MOJANG);
   }
 
   private static void writeTreeSchematic() throws IOException {
@@ -18,6 +19,26 @@ public class TestAll {
 
     try (OutputStream os = new FileOutputStream(outFile);
          BlockOutputStream bos = Voxels.blocksToBytes(os, SchematicType.MOJANG)) {
+      bos.write(treeBlocks, 0, treeBlocks.length);
+    }
+  }
+
+  private static void writeSpongeSchematic() throws IOException {
+    Block[] treeBlocks = setupTestingSchematic();
+    File outFile = new File(BASE_PATH, "tree.schem");
+
+    try (OutputStream os = new FileOutputStream(outFile);
+         BlockOutputStream bos = Voxels.blocksToBytes(os, SchematicType.SPONGE,
+         Boundary.fromMinAndMax(0, 0, 0, 15, 15, 15))
+    ) {
+      bos.write(treeBlocks, 0, treeBlocks.length);
+    }
+
+//     file to rust u8 vec macro
+    try (OutputStream os = new FileOutputStream(new File(BASE_PATH, "tree_schem_u8_vec.txt"));
+         BlockOutputStream bos = Voxels.blocksToBytes(os, SchematicType.SPONGE,
+         Boundary.fromMinAndMax(0, 0, 0, 15, 15, 15))
+    ) {
       bos.write(treeBlocks, 0, treeBlocks.length);
     }
   }

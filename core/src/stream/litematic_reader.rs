@@ -1,10 +1,10 @@
-use crate::common::{Block, BlockPosition, BlockState, Boundary, Region};
+use crate::common::{Block, BlockPosition, BlockState, Boundary};
+use crate::stream::litematic_bit_array::LitematicaBitArray;
 use crate::stream::stream::SchematicInputStream;
 use fastnbt::stream::{Parser, Value};
 use fastnbt::Tag;
 use std::collections::HashMap;
 use std::sync::Arc;
-use crate::stream::litematic_bit_array::LitematicaBitArray;
 
 pub struct LitematicaSchematicInputStream<R: std::io::Read> {
     parser: Parser<R>,
@@ -308,9 +308,9 @@ impl<R: std::io::Read> SchematicInputStream for LitematicaSchematicInputStream<R
                 // Using region origin for strict correctness.
                 Ok(Some(Boundary::new(
                     r.origin.0, r.origin.1, r.origin.2,
-                    (r.origin.0 + w as i32),
-                    (r.origin.1 + h as i32),
-                    (r.origin.2 + d as i32)
+                    r.origin.0 + w as i32,
+                    r.origin.1 + h as i32,
+                    r.origin.2 + d as i32
                 )))
             },
             None => Ok(None),

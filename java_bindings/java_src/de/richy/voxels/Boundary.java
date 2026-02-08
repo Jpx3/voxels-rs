@@ -50,7 +50,7 @@ public record Boundary(
   ) {
     return new Boundary(
       minX, minY, minZ,
-      maxX - minX, maxY - minY, maxZ - minZ
+      maxX - minX + 1, maxY - minY + 1, maxZ - minZ + 1
     );
   }
 }
