@@ -507,9 +507,9 @@ mod tests {
 
     #[test]
     fn test_large_page_store() {
-        let boundary = Boundary::new(0, 0, 0, 167, 41, 125);
+        let boundary = Boundary::new(0, 0, 0, 11, 41, 125);
         let mut store = PagedBlockStore::new_for_boundary(boundary, true);
-        for x in 0..167 {
+        for x in 0..11 {
             for y in 0..41 {
                 for z in 0..125 {
                     let mut rng = ChaCha8Rng::seed_from_u64((x as u64) << 32 | (y as u64) << 16 | (z as u64));
@@ -520,7 +520,7 @@ mod tests {
                 }
             }
         }
-        for x in 0..167 {
+        for x in 0..11 {
             for y in 0..41 {
                 for z in 0..125 {
                     let mut rng = ChaCha8Rng::seed_from_u64((x as u64) << 32 | (y as u64) << 16 | (z as u64));

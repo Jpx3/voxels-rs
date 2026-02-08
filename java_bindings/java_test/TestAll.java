@@ -3,14 +3,30 @@ import java.util.*;
 import de.richy.voxels.*;
 
 public class TestAll {
-  private static final String BASE_PATH = "C:/Users/strun/RustroverProjects/voxels-rs/test_data/generation_test/";
+  private static final String BASE_PATH = "../test_data/";
 
   public static void main(String[] args) throws IOException {
-    writeTreeSchematic();
-    writeSpongeSchematic();
+    testReadSchematic();
+//     writeTreeSchematic();
+//     writeSpongeSchematic();
 //     convert("tree.schematic", SchematicType.MOJANG, "tree.vxl", SchematicType.VXL);
 //     convert("tree.vxl", SchematicType.VXL, "tree.schem", SchematicType.SPONGE);
 //     convert("tree.schem", SchematicType.SPONGE, "tree_mojang.schematic", SchematicType.MOJANG);
+  }
+
+  private static void testReadSchematic() throws IOException {
+    File inFile = new File(BASE_PATH, "mojang.schem");
+    try (InputStream is = new FileInputStream(inFile);
+         BlockInputStream bis = Voxels.bytesToBlocks(is, SchematicType.MOJANG)) {
+      Block[] buffer = new Block[512];
+      int read;
+      long totalRead = 0;
+      while ((read = bis.read(buffer, 0, buffer.length)) != -1) {
+        // Process blocks in buffer[0..read-1]
+        totalRead += read;
+      }
+      System.out.println("Total blocks read: " + totalRead);
+    }
   }
 
   private static void writeTreeSchematic() throws IOException {
