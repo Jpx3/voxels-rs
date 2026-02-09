@@ -1,5 +1,5 @@
 [package]
-name = "voxels_java"
+name = "voxels_rs"
 version = "0.1.0"
 edition = "2021"
 
@@ -11,6 +11,4 @@ crate-type = ["cdylib"]
 voxels_core = { path = "../core" }
 robusta_jni = "0.2"
 jni = "0.21"
-flate2="1.1.8"
-tracing = "0.1.44"
-tracing-subscriber = "0.3.22"
+flate2="1.1.9"
