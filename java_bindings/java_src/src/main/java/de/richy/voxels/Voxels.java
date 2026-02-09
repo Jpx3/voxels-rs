@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.io.FileNotFoundException;
 
 public class Voxels {
   public static BlockInputStream bytesToBlocks(InputStream inputStream) {
