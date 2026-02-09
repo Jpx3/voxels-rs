@@ -1,0 +1,71 @@
+name: Publish to Maven Central
+on:
+  release:
+    types: [created]
+
+jobs:
+  build-natives:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: libvoxels_rs.so
+            folder: linux/x86_64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: voxels_rs.dll
+            folder: windows/x86_64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: libvoxels_rs.dylib
+            folder: macos/x86_64
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        working-directory: java_bindings/
+        run: cargo build --release
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.os }}
+          path: target/release/${{ matrix.artifact_name }}
+
+  # 2. Package & Publish Java
+  publish:
+    needs: build-natives
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { java-version: '21', distribution: 'temurin' }
+
+      # DOWNLOAD BINARIES INTO RESOURCES
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-ubuntu-latest
+          path: java_bindings/java_src/src/main/resources/native/linux/x86_64
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-windows-latest
+          path: java_bindings/java_src/src/main/resources/native/windows/x86_64
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-macos-latest
+          path: java_bindings/java_src/src/main/resources/native/macos/x86_64
+
+      - name: Publish
+        working-directory: java_bindings/java_src
+        run: ./gradlew publishToMavenCentral --no-daemon
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingKey: ${{ secrets.GPG_SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.GPG_SIGNING_PASSWORD }}

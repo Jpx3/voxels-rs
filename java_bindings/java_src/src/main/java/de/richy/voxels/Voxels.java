@@ -2,6 +2,10 @@ package de.richy.voxels;
 
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.IOException;
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 
 public class Voxels {
   public static BlockInputStream bytesToBlocks(InputStream inputStream) {
@@ -45,8 +49,52 @@ public class Voxels {
 
   private static native void init0();
 
+  public static synchronized void load() {
+    try {
+      String osName = System.getProperty("os.name").toLowerCase();
+      String osFolder = "";
+      String ext = "";
+      if (osName.contains("win")) {
+        osFolder = "windows";
+        ext = ".dll";
+      } else if (osName.contains("mac")) {
+        osFolder = "macos";
+        ext = ".dylib";
+      } else if (osName.contains("nix") || osName.contains("nux")) {
+        osFolder = "linux";
+        ext = ".so";
+      } else {
+        throw new UnsupportedOperationException("Unsupported OS: " + osName);
+      }
+
+      String arch = System.getProperty("os.arch").toLowerCase();
+      if (arch.equals("amd64")) arch = "x86_64";
+
+      String resourcePath = "/native/" + osFolder + "/" + arch + "/libvoxels_rs" + ext;
+
+      InputStream in = Voxels.class.getResourceAsStream(resourcePath);
+      if (in == null) {
+        File localDevFile = new File("../../target/release/libvoxels_rs" + ext);
+        if (localDevFile.exists()) {
+            System.load(localDevFile.getAbsolutePath());
+            loaded = true;
+            return;
+        }
+        throw new FileNotFoundException("Native lib not found in JAR at: " + resourcePath);
+      }
+
+      File temp = File.createTempFile("libvoxels_rs", ext);
+      temp.deleteOnExit();
+      Files.copy(in, temp.toPath(), StandardCopyOption.REPLACE_EXISTING);
+      System.load(temp.getAbsolutePath());
+      loaded = true;
+    } catch (IOException e) {
+      throw new RuntimeException("Failed to load native library", e);
+    }
+  }
+
   static {
-    System.loadLibrary("voxels_java");
+    loadLibrary();
     init0();
   }
 }
