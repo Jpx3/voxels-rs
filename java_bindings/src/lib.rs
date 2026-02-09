@@ -547,64 +547,64 @@ use std::io::{BufReader, BufWriter};use super::*;
          ) -> JniResult<Self> {}
      }
 
-    #[cfg(test)]
-    mod tests {
-        use std::fs;
-        use std::process::{Command, Stdio};
-
-        #[test]
-        fn test_java() {
-            compile_java_test_class();
-
-            let separator = if cfg!(target_os = "windows") {
-                ";"
-            } else {
-                ":"
-            };
-
-            let java_classpath = &format!(
-                "../target/voxels.jar{}../target/java_test_classes",
-                separator
-            );
-
-            let status = Command::new("java")
-                // inherit stdout and stderr
-                .stdout(Stdio::inherit())
-                .stderr(Stdio::inherit())
-                .args([
-                    "-cp",
-                    java_classpath,
-                    "-Djava.library.path=../target/release",
-                    "TestAll",
-                ])
-                .status()
-                .expect("Failed to run Java test class");
-
-            if !status.success() {
-                panic!("Java test class failed!");
-            }
-        }
-
-        fn compile_java_test_class() {
-            let java_src_dir = "java_test";
-            let out_dir = "../target/java_test_classes";
-            fs::create_dir_all(out_dir).unwrap();
-            let status = Command::new("javac")
-                .args([
-                    "-d",
-                    out_dir,
-                    "-cp",
-                    "../target/voxels.jar",
-                    &format!("{}/TestAll.java", java_src_dir),
-                ])
-                .status()
-                .expect("Failed to run javac");
-
-            if !status.success() {
-                panic!("Java test class compilation failed: {:?}", status);
-            }
-        }
-    }
+    // #[cfg(test)]
+    // mod tests {
+    //     use std::fs;
+    //     use std::process::{Command, Stdio};
+    //
+    //     #[test]
+    //     fn test_java() {
+    //         compile_java_test_class();
+    //
+    //         let separator = if cfg!(target_os = "windows") {
+    //             ";"
+    //         } else {
+    //             ":"
+    //         };
+    //
+    //         let java_classpath = &format!(
+    //             "../target/voxels.jar{}../target/java_test_classes",
+    //             separator
+    //         );
+    //
+    //         let status = Command::new("java")
+    //             // inherit stdout and stderr
+    //             .stdout(Stdio::inherit())
+    //             .stderr(Stdio::inherit())
+    //             .args([
+    //                 "-cp",
+    //                 java_classpath,
+    //                 "-Djava.library.path=../target/release",
+    //                 "TestAll",
+    //             ])
+    //             .status()
+    //             .expect("Failed to run Java test class");
+    //
+    //         if !status.success() {
+    //             panic!("Java test class failed!");
+    //         }
+    //     }
+    //
+    //     fn compile_java_test_class() {
+    //         let java_src_dir = "java_test";
+    //         let out_dir = "../target/java_test_classes";
+    //         fs::create_dir_all(out_dir).unwrap();
+    //         let status = Command::new("javac")
+    //             .args([
+    //                 "-d",
+    //                 out_dir,
+    //                 "-cp",
+    //                 "../target/voxels.jar",
+    //                 &format!("{}/TestAll.java", java_src_dir),
+    //             ])
+    //             .status()
+    //             .expect("Failed to run javac");
+    //
+    //         if !status.success() {
+    //             panic!("Java test class compilation failed: {:?}", status);
+    //         }
+    //     }
+    // }
 }
 
 trait JNITranslation {

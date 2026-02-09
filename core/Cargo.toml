@@ -1,13 +1,11 @@
 [package]
 name = "voxels_core"
-version = "0.1.0"
+version = "0.1.4"
 edition = "2021"
 
 [dependencies]
 fastnbt = "2.6.0"
 flate2="1.1.8"
 serde = { version = "1.0.228", features = ["derive"] }
-tracing-subscriber = "0.3.22"
-tracing = "0.1.44"
 rand = "0.10.0-rc.9"
 rand_chacha = "0.10.0"
