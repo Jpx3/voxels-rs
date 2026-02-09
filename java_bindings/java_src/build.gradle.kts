@@ -1,6 +1,8 @@
+import com.vanniktech.maven.publish.SonatypeHost
+
 plugins {
     `java-library`
-    id("com.vanniktech.maven.publish.base") version "0.28.0"
+    id("com.vanniktech.maven.publish") version "0.28.0"
 }
 
 repositories {
@@ -27,7 +29,7 @@ mavenPublishing {
 
     signAllPublications()
 
-    coordinates("de.richy", "voxels_rs", "0.1.3")
+    coordinates("de.richy", "voxels_rs", "0.1.8")
 
     pom {
         name.set("voxels_rs")
