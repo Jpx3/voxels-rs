@@ -49,7 +49,7 @@ public class Voxels {
 
   private static native void init0();
 
-  public static synchronized void load() {
+  private static synchronized void load() {
     try {
       String osName = System.getProperty("os.name").toLowerCase();
       String osFolder = "";
@@ -70,31 +70,29 @@ public class Voxels {
       String arch = System.getProperty("os.arch").toLowerCase();
       if (arch.equals("amd64")) arch = "x86_64";
 
-      String resourcePath = "/native/" + osFolder + "/" + arch + "/libvoxels_rs" + ext;
+      String resourcePath = "/native/" + osFolder + "/" + arch + "/libvoxels_java" + ext;
 
       InputStream in = Voxels.class.getResourceAsStream(resourcePath);
       if (in == null) {
-        File localDevFile = new File("../../target/release/libvoxels_rs" + ext);
+        File localDevFile = new File("../../target/release/libvoxels_java" + ext);
         if (localDevFile.exists()) {
             System.load(localDevFile.getAbsolutePath());
-            loaded = true;
             return;
         }
         throw new FileNotFoundException("Native lib not found in JAR at: " + resourcePath);
       }
 
-      File temp = File.createTempFile("libvoxels_rs", ext);
+      File temp = File.createTempFile("libvoxels_java", ext);
       temp.deleteOnExit();
       Files.copy(in, temp.toPath(), StandardCopyOption.REPLACE_EXISTING);
       System.load(temp.getAbsolutePath());
-      loaded = true;
     } catch (IOException e) {
       throw new RuntimeException("Failed to load native library", e);
     }
   }
 
   static {
-    loadLibrary();
+    load();
     init0();
   }
 }
