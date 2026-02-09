@@ -67,7 +67,7 @@ jobs:
           path: java_bindings/java_src/src/main/resources/native/macos/x86_64
 
       - name: Make gradlew executable
-        run: chmod +x gradlew
+        run: chmod +x java_bindings/java_src/gradlew
 
       - name: Publish to Maven Central
         working-directory: java_bindings/java_src
