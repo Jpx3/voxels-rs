@@ -72,10 +72,8 @@ jobs:
       - name: Publish to Maven Central
         working-directory: java_bindings/java_src
         shell: bash
-        run: |
-          export SIGNING_KEY=$(printf "%s" "${{ secrets.GPG_SIGNING_KEY }}" | base64 -d)
-          ./gradlew publishToMavenCentral --no-daemon \
-            -PsigningInMemoryKey="$SIGNING_KEY" \
+        run: ./gradlew publishToMavenCentral --no-daemon \
+            -PsigningInMemoryKey="${{ secrets.GPG_SIGNING_KEY }}" \
             -PsigningInMemoryKeyPassword="${{ secrets.GPG_SIGNING_PASSWORD }}" \
             -PmavenCentralUsername="${{ secrets.MAVEN_CENTRAL_USERNAME }}" \
             -PmavenCentralPassword="${{ secrets.MAVEN_CENTRAL_PASSWORD }}"
