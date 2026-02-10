@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use pyo3::{pyclass, pymethods};
-use voxels_core::common::{Block, BlockPosition, BlockState};
+use voxels_core::common::{Block, BlockPosition, BlockState, Boundary};
 
 #[pyclass]
 pub struct PyBlock {
@@ -106,6 +106,41 @@ impl From<BlockPosition> for PyBlockPosition {
     fn from(pos: BlockPosition) -> Self {
         PyBlockPosition {
             x: pos.x, y: pos.y, z: pos.z,
+        }
+    }
+}
+
+#[pyclass]
+pub struct PyBoundary {
+    pub min_x: i32,
+    pub min_y: i32,
+    pub min_z: i32,
+    pub d_x: u32,
+    pub d_y: u32,
+    pub d_z: u32,
+}
+
+#[pymethods]
+impl PyBoundary {
+    pub fn __str__(&self) -> String {
+        format!("Boundary(min=({}, {}, {}), size=({}, {}, {}))",
+            self.min_x, self.min_y, self.min_z, self.d_x, self.d_y, self.d_z)
+    }
+
+    pub fn __repr__(&self) -> String {
+        self.__str__()
+    }
+}
+
+impl From<Boundary> for PyBoundary {
+    fn from(boundary: Boundary) -> Self {
+        PyBoundary {
+            min_x: boundary.min_x,
+            min_y: boundary.min_y,
+            min_z: boundary.min_z,
+            d_x: boundary.d_x as u32,
+            d_y: boundary.d_y as u32,
+            d_z: boundary.d_z as u32,
         }
     }
 }

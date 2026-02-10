@@ -10,7 +10,7 @@ use voxels_core::stream::mojang_reader::MojangSchematicInputStream;
 use voxels_core::stream::sponge_reader::SpongeSchematicInputStream;
 use voxels_core::stream::stream::SchematicInputStream;
 use voxels_core::stream::vxl_reader::VXLSchematicInputStream;
-use crate::shared::PyBlock;
+use crate::shared::{PyBlock, PyBoundary};
 
 #[pyclass(unsendable)]
 pub struct VoxelReader {
@@ -66,6 +66,29 @@ impl VoxelReader {
 
     fn __str__(&self) -> PyResult<String> {
         Ok("voxels_rs.read() block".to_string())
+    }
+
+    fn boundary(&mut self) -> PyResult<PyBoundary> {
+        if !self.entered {
+            return Err(PyErr::new::<PyRuntimeError, _>("Cannot get boundary without entering context"));
+        }
+        if self.reader.is_none() {
+            return Err(PyErr::new::<PyRuntimeError, _>("Reader is closed"));
+        }
+        if let Some(reader) = &mut self.reader {
+            let result = reader.boundary();
+            if let Err(e) = result {
+                Err(PyErr::new::<PyRuntimeError, _>(e))
+            } else {
+                if let Some(boundary) = result.unwrap() {
+                    Ok(PyBoundary::from(boundary))
+                } else {
+                    Err(PyErr::new::<PyRuntimeError, _>("Failed to read boundary"))
+                }
+            }
+        } else {
+            Err(PyErr::new::<PyRuntimeError, _>("Reader is closed"))
+        }
     }
 
     fn iter_bulks<'py>(slf: Py<Self>, py: Python<'py>) -> PyResult<Py<Self>> {
