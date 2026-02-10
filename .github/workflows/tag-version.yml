@@ -27,6 +27,7 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
+          git fetch origin main
           git checkout main
           git add **/Cargo.toml
           git diff-index --quiet HEAD || git commit -m "chore: bump version to ${{ steps.get_version.outputs.VERSION }}"
