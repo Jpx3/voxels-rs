@@ -11,6 +11,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
+          ref: master
           fetch-depth: 0
 
       - name: Install cargo-edit
@@ -27,8 +28,12 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git fetch origin main
-          git checkout main
           git add **/Cargo.toml
-          git diff-index --quiet HEAD || git commit -m "chore: bump version to ${{ steps.get_version.outputs.VERSION }}"
-          git push origin main
+          cargo update --workspace || true 
+          git add Cargo.lock
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "chore: bump version to ${{ steps.get_version.outputs.VERSION }}"
+            git push origin master
+          else
+            echo "No version changes detected in Cargo.toml files."
+          fi

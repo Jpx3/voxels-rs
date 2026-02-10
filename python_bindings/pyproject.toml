@@ -11,6 +11,7 @@ requires-python = ">=3.11"
 dependencies = [
     "maturin>=1.11.0,<1.14.0",
     "pytest>=9.0.2",
+    "numpy>=1.28.0"
 ]
 
 [tool.maturin]

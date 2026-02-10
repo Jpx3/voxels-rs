@@ -1,5 +1,7 @@
 use std::sync::Arc;
-use pyo3::{pyclass, pymethods};
+use numpy::ndarray::Array1;
+use numpy::{IntoPyArray, PyArray1};
+use pyo3::{pyclass, pymethods, Bound, PyResult, Python};
 use voxels_core::common::{Block, BlockPosition, BlockState, Boundary};
 
 #[pyclass]
@@ -44,6 +46,10 @@ pub struct PyBlockState {
 #[pymethods]
 impl PyBlockState {
     pub fn id(&self) -> String {
+        self.owning.name.clone()
+    }
+
+    pub fn name(&self) -> String {
         self.owning.name.clone()
     }
 
@@ -95,7 +101,6 @@ impl PyBlockPosition {
         self.y
     }
 
-    #[getter]
     pub fn z(&self) -> i32 {
         self.z
     }
@@ -122,6 +127,11 @@ pub struct PyBoundary {
 
 #[pymethods]
 impl PyBoundary {
+    #[new]
+    fn new(min_x: i32, min_y: i32, min_z: i32, d_x: u32, d_y: u32, d_z: u32) -> Self {
+        PyBoundary { min_x, min_y, min_z, d_x, d_y, d_z }
+    }
+
     pub fn __str__(&self) -> String {
         format!("Boundary(min=({}, {}, {}), size=({}, {}, {}))",
             self.min_x, self.min_y, self.min_z, self.d_x, self.d_y, self.d_z)
@@ -129,6 +139,54 @@ impl PyBoundary {
 
     pub fn __repr__(&self) -> String {
         self.__str__()
+    }
+
+    pub fn min(&self) -> PyBlockPosition {
+        PyBlockPosition { x: self.min_x, y: self.min_y, z: self.min_z }
+    }
+
+    pub fn max(&self) -> PyBlockPosition {
+        PyBlockPosition {
+            x: self.min_x + self.d_x as i32 - 1,
+            y: self.min_y + self.d_y as i32 - 1,
+            z: self.min_z + self.d_z as i32 - 1,
+        }
+    }
+
+    pub fn to_numpy<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<f64>>> {
+        let arr = PyArray1::from_vec(py, vec![
+            self.min_x as f64, self.min_y as f64, self.min_z as f64,
+            self.d_x as f64, self.d_y as f64, self.d_z as f64,
+        ]);
+        Ok(arr)
+    }
+
+    pub fn size(&self) -> (u32, u32, u32) {
+        (self.d_x, self.d_y, self.d_z)
+    }
+
+    pub fn min_x(&self) -> i32 {
+        self.min_x
+    }
+
+    pub fn min_y(&self) -> i32 {
+        self.min_y
+    }
+
+    pub fn min_z(&self) -> i32 {
+        self.min_z
+    }
+
+    pub fn d_x(&self) -> u32 {
+        self.d_x
+    }
+
+    pub fn d_y(&self) -> u32 {
+        self.d_y
+    }
+
+    pub fn d_z(&self) -> u32 {
+        self.d_z
     }
 }
 
