@@ -1,0 +1,32 @@
+name: Update Version on Tag
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  update-cargo-toml:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install cargo-edit
+        run: cargo install cargo-edit
+
+      - name: Extract tag name
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Update Cargo.toml
+        run: cargo set-version ${{ steps.get_version.outputs.VERSION }}
+
+      - name: Commit and Push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add Cargo.toml
+          git commit -m "chore: bump version to ${{ steps.get_version.outputs.VERSION }}"
+          git push origin main
