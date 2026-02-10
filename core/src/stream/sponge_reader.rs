@@ -77,10 +77,12 @@ impl<R: Read> SpongeSchematicInputStream<R> {
     fn read_header(&mut self) -> Result<(), String> {
         let result: Value = fastnbt::from_reader(&mut self.reader).map_err(|e| format!("Sponge: Failed to read NBT data: {}", e))?;
         if let Value::Compound(root) = result {
-            if !root.contains_key("Schematic") {
-                return Err("Sponge: Missing 'Schematic' tag".into());
-            }
-            let schematic_value = &root["Schematic"];
+            let schematic_value = if root.contains_key("Schematic") {
+                &root["Schematic"]
+            } else {
+                &Value::Compound(root.clone())
+            };
+
             if let Value::Compound(schematic) = schematic_value {
                 let height = match schematic.get("Height") {
                     Some(Value::Short(v)) => *v as i32,
@@ -253,7 +255,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sponge_reader() {
+    fn test_sponge_v3_reader() {
         const TREE_SCHEMATIC: &[u8] = include_bytes!("test_schematics/tree.sponge");
         let reader = std::io::Cursor::new(TREE_SCHEMATIC);
         let reader = GzDecoder::new(reader);
@@ -274,5 +276,16 @@ mod tests {
             assert_eq!(block.state.name(), expected.state.name(), "Block state name mismatch at position {:?}", block.position);
             assert_eq!(block.state.properties(), expected.state.properties(), "Block state properties mismatch at position {:?}", block.position);
         }
+    }
+
+    #[test]
+    fn test_sponge_v2_arbitrary_schem() {
+        const TEST_SCHEMATIC: &[u8] = include_bytes!("test_schematics/schematic.spongev2");
+        let reader = std::io::Cursor::new(TEST_SCHEMATIC);
+        let reader = GzDecoder::new(reader);
+        let mut sponge_reader = SpongeSchematicInputStream::new(reader);
+        let read_blocks = sponge_reader.read_to_end_into_vec().unwrap();
+        assert!(!read_blocks.is_empty(), "Expected to read some blocks from the schematic");
+
     }
 }
