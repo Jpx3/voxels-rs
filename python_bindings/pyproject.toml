@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "voxels_rs"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Python bindings for the voxels-rs library."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -16,3 +16,6 @@ dependencies = [
 [tool.maturin]
 python-source = "python"
 module-name = "voxels_rs"
+
+[tool.maturin.version]
+source = "vcs"

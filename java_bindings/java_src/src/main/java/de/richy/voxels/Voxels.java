@@ -7,6 +7,7 @@ import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.io.FileNotFoundException;
+import java.net.URL;
 
 public class Voxels {
   public static BlockInputStream bytesToBlocks(InputStream inputStream) {
@@ -52,43 +53,44 @@ public class Voxels {
 
   private static synchronized void load() {
     try {
-      String osName = System.getProperty("os.name").toLowerCase();
-      String osFolder = "";
-      String ext = "";
-      if (osName.contains("win")) {
-        osFolder = "windows";
-        ext = ".dll";
-      } else if (osName.contains("mac")) {
-        osFolder = "macos";
-        ext = ".dylib";
-      } else if (osName.contains("nix") || osName.contains("nux")) {
-        osFolder = "linux";
-        ext = ".so";
+      String os = System.getProperty("os.name").toLowerCase();
+      String libName;
+
+      if (os.contains("win")) {
+        libName = "voxels_java.dll";
+      } else if (os.contains("mac")) {
+        libName = "libvoxels_java.dylib";
+      } else if (os.contains("nix") || os.contains("nux")) {
+        libName = "libvoxels_java.so";
       } else {
-        throw new UnsupportedOperationException("Unsupported OS: " + osName);
+        throw new UnsupportedOperationException("Unsupported OS: " + os);
       }
 
-      String arch = System.getProperty("os.arch").toLowerCase();
-      if (arch.equals("amd64")) arch = "x86_64";
+      // Attempt to load from classpath/resources
+      URL resource = Voxels.class.getResource("/native/" + libName);
 
-      String resourcePath = "/native/" + osFolder + "/" + arch + "/libvoxels_java" + ext;
-
-      InputStream in = Voxels.class.getResourceAsStream(resourcePath);
-      if (in == null) {
-        File localDevFile = new File("../../target/release/libvoxels_java" + ext);
-        if (localDevFile.exists()) {
-            System.load(localDevFile.getAbsolutePath());
-            return;
+      if (resource == null) {
+        // Fallback for local development
+        File devFile = new File("target/release/" + libName);
+        if (devFile.exists()) {
+          System.load(devFile.getAbsolutePath());
+          return;
         }
-        throw new FileNotFoundException("Native lib not found in JAR at: " + resourcePath);
+        throw new FileNotFoundException("Native library " + libName + " not found.");
       }
 
-      File temp = File.createTempFile("libvoxels_java", ext);
+      // Extract to temporary file for loading
+      String[] parts = libName.split("\\.");
+      File temp = File.createTempFile(parts[0], "." + parts[1]);
       temp.deleteOnExit();
-      Files.copy(in, temp.toPath(), StandardCopyOption.REPLACE_EXISTING);
+
+      try (InputStream in = resource.openStream()) {
+        Files.copy(in, temp.toPath(), StandardCopyOption.REPLACE_EXISTING);
+      }
+
       System.load(temp.getAbsolutePath());
     } catch (IOException e) {
-      throw new RuntimeException("Failed to load native library", e);
+      throw new RuntimeException("Critical failure loading native library", e);
     }
   }
 
