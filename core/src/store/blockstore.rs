@@ -2,6 +2,7 @@ use crate::common::{AxisOrder, Block, BlockPosition, BlockState, Boundary, Regio
 use crate::store::paging::{ArrayPage, Page};
 use std::collections::HashMap;
 use std::sync::Arc;
+use rustc_hash::FxHashMap;
 
 pub trait BlockStore: Region {
     fn block_at(&self, pos: &BlockPosition) -> Result<Option<Arc<BlockState>>, String>;
@@ -128,7 +129,7 @@ impl BlockStore for SparseBlockStore {
 }
 
 pub struct PagedBlockStore {
-    pages: HashMap<i64, Box<dyn Page>>,
+    pages: FxHashMap<i64, Box<dyn Page>>,
     palette: Vec<Arc<BlockState>>,
     reverse_palette: HashMap<Arc<BlockState>, usize>,
     page_size_x: usize,
@@ -184,7 +185,7 @@ impl PagedBlockStore {
         let page_size_z = 1usize << bits_z;
 
         PagedBlockStore {
-            pages: HashMap::new(),
+            pages: FxHashMap::with_capacity_and_hasher(1024, Default::default()),
             palette: Vec::new(),
             reverse_palette: HashMap::new(),
             page_size_x,
@@ -313,14 +314,15 @@ fn temp_state_from_temp_id(
     temp_palette: &mut HashMap<isize, Arc<BlockState>>,
     id: isize,
 ) -> Arc<BlockState> {
-    if !temp_palette.contains_key(&id) {
-        let unknown_state = BlockState::new(
-            "unknown".to_string(),
-            vec![("id".to_string(), id.to_string())],
-        );
-        temp_palette.insert(id, Arc::from(unknown_state));
-    }
-    temp_palette.get(&id).unwrap().clone()
+    temp_palette
+        .entry(id)
+        .or_insert_with(|| {
+            Arc::from(BlockState::new(
+                "unknown".to_string(),
+                vec![("id".to_string(), id.to_string())],
+            ))
+        })
+        .clone()
 }
 
 impl Region for LazyPaletteBlockStoreWrapper {
@@ -356,7 +358,6 @@ impl LazyPaletteBlockStoreWrapper {
 
     pub fn block_at(&self, pos: &BlockPosition) -> Result<Option<Arc<BlockState>>, String> {
         match self.actual_palette {
-            None => Err("Can not access blocks if palette is not provided".to_string()),
             Some(ref palette) => {
                 if let Some(state) = self.inner.block_at(pos)? {
                     let id_str = &state.properties[0].1;
@@ -372,7 +373,20 @@ impl LazyPaletteBlockStoreWrapper {
                     Ok(None)
                 }
             }
+            None => Err("Can not access blocks if palette is not provided".to_string()),
         }
+    }
+
+    /// Attempt to find the temp id of a state from the actual palette, and if not found, return None
+    pub fn state_to_temp_id(&mut self, state: &Arc<BlockState>) -> Option<isize> {
+        if let Some(ref palette) = self.actual_palette {
+            for (id, actual_state) in palette.iter() {
+                if actual_state == state {
+                    return Some(*id);
+                }
+            }
+        }
+        None
     }
 
     pub fn set_unknown_block(&mut self, pos: &BlockPosition, id: isize) -> Result<(), String> {

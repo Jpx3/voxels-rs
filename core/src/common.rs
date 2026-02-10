@@ -1,8 +1,11 @@
 use std::cmp::Ordering;
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
 use std::string::ToString;
 use std::sync::{Arc, OnceLock};
+use crate::store::paging::Page;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum Axis {
@@ -35,10 +38,26 @@ pub struct Boundary {
     pub d_z: i32,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Eq)]
 pub struct BlockState {
     pub name: String,
     pub properties: Vec<(String, String)>,
+
+    cached_hash: u64,
+}
+
+impl Hash for BlockState {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_u64(self.cached_hash);
+    }
+}
+
+impl PartialEq for BlockState {
+    fn eq(&self, other: &Self) -> bool {
+        self.cached_hash == other.cached_hash
+            && self.name == other.name
+            && self.properties == other.properties
+    }
 }
 
 impl Display for BlockState {
@@ -69,14 +88,14 @@ impl Axis {
 }
 
 impl AxisOrder {
-    fn axis(&self) -> Vec<Axis> {
+    fn axis(&self) -> [Axis; 3] {
         match self {
-            AxisOrder::XYZ => vec![Axis::X, Axis::Y, Axis::Z],
-            AxisOrder::XZY => vec![Axis::X, Axis::Z, Axis::Y],
-            AxisOrder::YXZ => vec![Axis::Y, Axis::X, Axis::Z],
-            AxisOrder::YZX => vec![Axis::Y, Axis::Z, Axis::X],
-            AxisOrder::ZXY => vec![Axis::Z, Axis::X, Axis::Y],
-            AxisOrder::ZYX => vec![Axis::Z, Axis::Y, Axis::X],
+            AxisOrder::XYZ => [Axis::X, Axis::Y, Axis::Z],
+            AxisOrder::XZY => [Axis::X, Axis::Z, Axis::Y],
+            AxisOrder::YXZ => [Axis::Y, Axis::X, Axis::Z],
+            AxisOrder::YZX => [Axis::Y, Axis::Z, Axis::X],
+            AxisOrder::ZXY => [Axis::Z, Axis::X, Axis::Y],
+            AxisOrder::ZYX => [Axis::Z, Axis::Y, Axis::X],
         }
     }
 
@@ -353,11 +372,27 @@ impl BlockPosition {
 static AIR: OnceLock<Arc<BlockState>> = OnceLock::new();
 
 impl BlockState {
-    pub fn from_name(name: String) -> Self {
+    pub fn new(name: String, properties: Vec<(String, String)>) -> Self {
+        let hash = BlockState::hash(&name, &properties);
         BlockState {
             name,
-            properties: vec![],
+            properties,
+            cached_hash: hash,
         }
+    }
+
+    fn hash(name: &String, properties: &Vec<(String, String)>) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        name.hash(&mut hasher);
+        for (k, v) in properties {
+            k.hash(&mut hasher);
+            v.hash(&mut hasher);
+        }
+        hasher.finish()
+    }
+
+    pub fn from_name(name: String) -> Self {
+        BlockState::new(name, vec![])
     }
 
     pub fn as_ref(&self) -> &BlockState {
@@ -369,11 +404,7 @@ impl BlockState {
         let props_vec: Vec<(String, String)> = properties.into_iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
-        BlockState { name, properties: props_vec }
-    }
-
-    pub fn new(name: String, properties: Vec<(String, String)>) -> Self {
-        BlockState { name, properties }
+        BlockState::new(name, props_vec)
     }
 
     pub fn air_state_ref<'a>() -> &'a BlockState {
@@ -385,10 +416,7 @@ impl BlockState {
     }
 
     pub fn air() -> Self {
-        BlockState {
-            name: "minecraft:air".to_string(),
-            properties: vec![],
-        }
+        BlockState::from_name("minecraft:air".to_string())
     }
 
     pub fn is_air(&self) -> bool {
@@ -477,10 +505,7 @@ impl BlockState {
             .collect();
 
         new_properties.extend(to_add);
-        Ok(BlockState {
-            name: new_name,
-            properties: new_properties,
-        })
+        Ok(BlockState::new(new_name, new_properties))
     }
 
     pub fn difference(&self, other: &BlockState) -> String {
@@ -535,10 +560,7 @@ impl BlockState {
     }
 
     pub fn clone(&self) -> Self {
-        BlockState {
-            name: self.name.clone(),
-            properties: self.properties.clone(),
-        }
+        BlockState::new(self.name.clone(), self.properties.clone())
     }
 
     pub fn from_str(input: &str) -> Result<BlockState, String> {
@@ -686,12 +708,19 @@ impl Iterator for BoundaryIterator<'_> {
         }
         let result = self.current;
         let axis_vectors = self.axis_order.axis();
-        // last since we will reverse the literal axis order
+        let innermost_axis = *axis_vectors.last().unwrap();
+        let next_val = self.current.select(&innermost_axis) + 1;
+        let limit = self.boundary.select_max(&innermost_axis);
+        if next_val <= limit {
+            self.current.select_set(&innermost_axis, next_val);
+            return Some(result);
+        }
+        self.current.select_set(&innermost_axis, self.boundary.select_min(&innermost_axis));
         let last_axis = axis_vectors.first().unwrap();
-        //                          ----------vvvv------- here!
-        for axis in axis_vectors.iter().rev() {
+        for axis in axis_vectors.iter().rev().skip(1) {
             let next = self.current.select(axis) + 1;
             let limit = self.boundary.select_max(axis);
+
             if next > limit {
                 if axis == last_axis {
                     self.done = true;
@@ -703,8 +732,10 @@ impl Iterator for BoundaryIterator<'_> {
                 break;
             }
         }
+
         Some(result)
     }
+
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
         if self.done {
             return None;

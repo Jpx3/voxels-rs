@@ -1,6 +1,6 @@
 [package]
 name = "voxels_core"
-version = "0.2.6"
+version = "0.2.7"
 edition = "2021"
 
 [dependencies]
@@ -9,3 +9,4 @@ flate2="1.1.8"
 serde = { version = "1.0.228", features = ["derive"] }
 rand = "0.10.0-rc.9"
 rand_chacha = "0.10.0"
+rustc-hash = "2.1.1"

@@ -171,9 +171,20 @@ impl<R: Read> SpongeSchematicInputStream<R> {
                 let block_states = self.read_var_int_array(&bytes)?;
                 let boundary = self.boundary.unwrap();
                 let mut block_iter = boundary.iter(AxisOrder::YZX);
+                let blocks = self.blocks.as_mut().unwrap();
+                let air_state_index: i32 = blocks.state_to_temp_id(
+                    &BlockState::air_arc()
+                ).map(|t| t as i32).unwrap_or(-1);
+
                 for (_, state_index) in block_states.iter().enumerate() {
-                    let pos = block_iter.next().ok_or("Sponge: Boundary size mismatch (iterator exhausted before stream)")?;
-                    self.blocks.as_mut().unwrap().set_unknown_block(
+                    if *state_index < 0 {
+                        return Err(format!("Sponge: Invalid block state index {} in block data", state_index));
+                    }
+                    let pos = block_iter.next().ok_or_else(|| "Sponge: Block data has more entries than expected from boundary".to_string())?;
+                    if *state_index == air_state_index {
+                        continue;
+                    }
+                    blocks.set_unknown_block(
                         &pos, *state_index as isize
                     ).map_err(|e| format!("Sponge: Failed to copy block at pos {:?}: {}", pos, e))?;
                 }
@@ -265,7 +276,7 @@ mod tests {
         assert_eq!(read_blocks.len(), expected_blocks.len());
         for expected in expected_blocks.clone() {
             let found = read_blocks.iter().find(|b| b.position == expected.position);
-            assert!(found.is_some(), "Expected block at position {:?} not found", expected.position);
+            assert!(found.is_some(), "Expected to find block at {:?} but it was missing", expected.position);
             let found_block = found.unwrap();
             assert_eq!(found_block.state.name(), expected.state.name(), "Block state name mismatch at position {:?}", expected.position);
             assert_eq!(found_block.state.properties(), expected.state.properties(), "Block state properties mismatch at position {:?}", expected.position);

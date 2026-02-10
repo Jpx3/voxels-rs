@@ -144,11 +144,13 @@ impl VoxelReader {
             return Err(PyErr::new::<PyRuntimeError, _>("Cannot read full after iterating"));
         }
         if let Some(reader) = &mut self.reader {
-            reader.read_to_end_into_vec().map_err(|e| PyErr::new::<PyRuntimeError, _>(e)).map(|blocks| {
-                blocks.into_iter().map(|b| {
-                    PyBlock::from(b)
-                }).collect()
-            })
+            let result = reader.read_to_end_into_vec();
+            result.map_err(|e| PyErr::new::<PyRuntimeError, _>(e))
+                .map(|blocks| {
+                    blocks.into_iter()
+                        .map(|b| { PyBlock::from(b) })
+                        .collect()
+                })
         } else {
             Err(PyErr::new::<PyRuntimeError, _>("Reader is closed"))
         }

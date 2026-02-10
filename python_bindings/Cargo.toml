@@ -1,6 +1,6 @@
 [package]
 name = "voxels_rs"
-version = "0.2.6"
+version = "0.2.7"
 edition = "2021"
 
 [lib]
@@ -12,3 +12,12 @@ voxels_core = { path = "../core" }
 pyo3 = { version = "0.28.0", features = ["extension-module"] }
 flate2 = "1.1.8"
 numpy = "0.28.0"
+
+
+[profile.dev]
+debug = 1
+strip = false
+
+[profile.release]
+debug = 1
+strip = false

@@ -1,7 +1,7 @@
 import voxels_rs
 
 def test_voxel_class():
-  with voxels_rs.open("test_data/mojang.schem") as schematic:
+  with voxels_rs.open("C:/Users/strun/RustroverProjects/voxels-rs/test_data/sponge3-monster.schem") as schematic:
 #     print(schematic)
 #     for chunk in schematic.iter_bulks():
 #       for block in chunk:
@@ -17,3 +17,6 @@ def test_voxel_class():
 #     print(all_blocks)
 
   exit(1)
+
+if __name__ == "__main__":
+  test_voxel_class()

@@ -713,8 +713,8 @@ impl JNITranslation for BlockState {
             let value: String = env.get_string(jvalue.into())?.into();
             properties.push((key, value));
         }
-        Ok(BlockState {
+        Ok(BlockState::new(
             name, properties,
-        })
+        ))
     }
 }
