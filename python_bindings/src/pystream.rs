@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::io;
-use std::io::{Cursor, Read};
+use std::io::{Cursor, Read, Write};
 use pyo3::{Bound, Py, PyAny, PyErr, Python};
 use pyo3::types::{PyBytes, PyString};
 use pyo3::prelude::*;
@@ -23,6 +23,26 @@ impl Read for PyStreamAdapter {
     }
 }
 
+impl Write for PyStreamAdapter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        Python::attach(|py| {
+            let written = self.obj.call_method1(py, "write", (buf,))
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            let written_len: usize = written.extract(py)
+                .map_err(|_e| io::Error::new(io::ErrorKind::Other, "Failed to extract written length".to_string()))?;
+            Ok(written_len)
+        })
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Python::attach(|py| {
+            self.obj.call_method0(py, "flush")
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            Ok(())
+        })
+    }
+}
+
 pub fn reader_from(input: &Bound<'_, PyAny>) -> PyResult<Box<dyn Read>> {
     if let Ok(py_str) = input.downcast::<PyString>() {
         let s = py_str.to_str()?;
@@ -39,5 +59,13 @@ pub fn reader_from(input: &Bound<'_, PyAny>) -> PyResult<Box<dyn Read>> {
         Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
             "Input must be a path, URL, bytes, or file-like object"
         ))
+    }
+}
+
+pub fn writer_from(input: String) -> PyResult<Box<dyn Write>> {
+    if input.starts_with("http") {
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>("HTTP not linked"))
+    } else {
+        Ok(Box::new(File::create(input)?))
     }
 }

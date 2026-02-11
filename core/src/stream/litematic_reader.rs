@@ -279,8 +279,6 @@ impl<R: std::io::Read> SchematicInputStream for LitematicaSchematicInputStream<R
                 written += 1;
             }
 
-            // Advance Cursor
-            // X varies fastest, then Z, then Y (based on index formula and typical NBT loop order)
             region.cursor.0 += 1;
             if region.cursor.0 >= sx {
                 region.cursor.0 = 0;
@@ -304,8 +302,6 @@ impl<R: std::io::Read> SchematicInputStream for LitematicaSchematicInputStream<R
         match &self.current_region {
             Some(r) => {
                 let (w, h, d) = r.size;
-                // Boundary relative to 0,0,0 usually, or absolute?
-                // Using region origin for strict correctness.
                 Ok(Some(Boundary::new(
                     r.origin.0, r.origin.1, r.origin.2,
                     r.origin.0 + w as i32,

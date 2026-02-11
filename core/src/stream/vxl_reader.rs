@@ -25,8 +25,8 @@ impl<R: Read> SchematicInputStream for VXLSchematicInputStream<R> {
             self.read_header()?;
         }
 
-        let boundary = self.boundary.ok_or("VXL: Missing boundary")?;
-        let axis_order = self.axis_order.ok_or("VXL: Missing axis order")?;
+        let boundary = self.boundary.ok_or_else(|| "VXL: Missing boundary")?;
+        let axis_order = self.axis_order.ok_or_else(|| "VXL: Missing axis order")?;
 
         let mut blocks_written = 0;
 
@@ -45,7 +45,7 @@ impl<R: Read> SchematicInputStream for VXLSchematicInputStream<R> {
             if let Some(state) = &self.current_run_state {
                 let mut pos_iter = boundary.iter(axis_order).skip(self.read_blocks);
                 for r in 0..attempt_to_process {
-                    let pos = pos_iter.next().ok_or("VXL: Iterator exhausted")?;
+                    let pos = pos_iter.next().ok_or_else(|| format!("VXL: Ran out of positions in boundary after reading {} blocks", self.read_blocks))?;
                     if !state.is_air() {
                         buffer.push(Block {
                             position: pos,

@@ -17,6 +17,19 @@ pub trait SchematicInputStream {
         }
     }
     
+    fn transfer_into(&mut self, mut store: Box<dyn SchematicOutputStream>) -> Result<(), String> {
+        loop {
+            let mut blocks = Vec::new();
+            if let Some(read_blocks) = self.read(&mut blocks, 0, 4096)? {
+                store.write(&blocks[..read_blocks])?;
+            } else {
+                break;
+            }
+        }
+        store.complete()?;
+        Ok(())
+    }
+    
     /// Reads all blocks from the input stream into the given BlockStore.
     /// This method handles buffering internally for efficiency.
     fn read_to_end(&mut self, store: &mut dyn BlockStore) -> Result<(), String> {

@@ -9,5 +9,7 @@ pub mod stream;
 mod litematic_reader;
 mod litematic_bit_array;
 mod shared_stream;
+mod mcedit_reader;
+mod legacy_ids;
 
 

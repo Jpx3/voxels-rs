@@ -8,6 +8,7 @@ use std::cell::RefCell;
 use std::cmp::min;
 use std::io::Read;
 use std::rc::Rc;
+use crate::stream::mcedit_reader::MCEditSchematicInputStream;
 
 pub struct AnySchematicInputStream {
     options: Vec<(Box<dyn SchematicInputStream>, Vec<Block>)>,
@@ -80,6 +81,7 @@ impl AnySchematicInputStream {
             vec![
                 Box::new(|r| Box::new(SpongeSchematicInputStream::new(r))),
                 Box::new(|r| Box::new(MojangSchematicInputStream::new(r))),
+                Box::new(|r| Box::new(MCEditSchematicInputStream::new(r))),
                 Box::new(|r| Box::new(VXLSchematicInputStream::new(r))),
             ]
         )

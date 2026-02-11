@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::string::ToString;
 use std::sync::{Arc, OnceLock};
@@ -38,12 +38,21 @@ pub struct Boundary {
     pub d_z: i32,
 }
 
-#[derive(Clone, Debug, Eq)]
+#[derive(Clone, Eq)]
 pub struct BlockState {
     pub name: String,
     pub properties: Vec<(String, String)>,
 
     cached_hash: u64,
+}
+
+impl Debug for BlockState {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BlockState")
+            .field("name", &self.name)
+            .field("properties", &self.properties)
+            .finish()
+    }
 }
 
 impl Hash for BlockState {
@@ -97,6 +106,10 @@ impl AxisOrder {
             AxisOrder::ZXY => [Axis::Z, Axis::X, Axis::Y],
             AxisOrder::ZYX => [Axis::Z, Axis::Y, Axis::X],
         }
+    }
+    
+    pub fn preferred() -> Self {
+        AxisOrder::XYZ
     }
 
     pub fn index(&self, pos: &BlockPosition, boundary: &Boundary) -> i32 {
@@ -615,16 +628,10 @@ impl BlockState {
                 return Err("Malformed BlockState string: empty property key or value".to_string());
             }
             if !k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '+' || c == '-') {
-                return Err(format!(
-                    "Malformed BlockState string: illegal character in property key '{}'",
-                    k
-                ));
+                return Err(format!("Malformed BlockState string: illegal character in property key '{}'", k));
             }
             if !v.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '+' || c == '-') {
-                return Err(format!(
-                    "Malformed BlockState string: illegal character in property value '{}'",
-                    v
-                ));
+                return Err(format!("Malformed BlockState string: illegal character in property value '{}'", v));
             }
         }
         Ok(BlockState::new(type_name.trim().to_string(), property_map))

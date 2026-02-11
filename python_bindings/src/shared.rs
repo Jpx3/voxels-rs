@@ -202,3 +202,16 @@ impl From<Boundary> for PyBoundary {
         }
     }
 }
+
+impl From<PyBoundary> for Boundary {
+    fn from(boundary: PyBoundary) -> Self {
+        Boundary {
+            min_x: boundary.min_x,
+            min_y: boundary.min_y,
+            min_z: boundary.min_z,
+            d_x: boundary.d_x as i32,
+            d_y: boundary.d_y as i32,
+            d_z: boundary.d_z as i32,
+        }
+    }
+}

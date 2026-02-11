@@ -1,15 +1,21 @@
-use crate::pystream::reader_from;
+use voxels_core::stream::stream::SchematicOutputStream;
+use crate::pystream::{reader_from, writer_from};
 use flate2::bufread::GzDecoder;
 use pyo3::prelude::*;
-use std::io::{BufReader, Read};
+use std::io::{BufReader, BufWriter, Read};
+use flate2::write::GzEncoder;
 use pyo3::exceptions::{PyRuntimeError, PyStopIteration};
 use pyo3::ffi::PyObject;
 use pyo3::types::{PyIterator, PyString};
+use voxels_core::common::AxisOrder;
 use voxels_core::stream::any_reader::AnySchematicInputStream;
 use voxels_core::stream::mojang_reader::MojangSchematicInputStream;
+use voxels_core::stream::mojang_writer::MojangSchematicOutputStream;
 use voxels_core::stream::sponge_reader::SpongeSchematicInputStream;
+use voxels_core::stream::sponge_writer::SpongeSchematicOutputStream;
 use voxels_core::stream::stream::SchematicInputStream;
 use voxels_core::stream::vxl_reader::VXLSchematicInputStream;
+use voxels_core::stream::vxl_writer::VXLSchematicOutputStream;
 use crate::shared::{PyBlock, PyBoundary};
 
 #[pyclass(unsendable)]
@@ -151,6 +157,38 @@ impl VoxelReader {
                         .map(|b| { PyBlock::from(b) })
                         .collect()
                 })
+        } else {
+            Err(PyErr::new::<PyRuntimeError, _>("Reader is closed"))
+        }
+    }
+
+    #[pyo3(signature = (path, format="vxl"))]
+    fn save(&mut self, path: String, format: &str) -> PyResult<()> {
+        if self.reader.is_none() {
+            return Err(PyErr::new::<PyRuntimeError, _>("Reader is closed"));
+        }
+        let stream = BufWriter::new(GzEncoder::new(BufWriter::new(writer_from(path)?), flate2::Compression::default()));
+        let boundary = self.boundary()?.into();
+
+        let output_schematic_stream: Box<dyn SchematicOutputStream> = match format.to_ascii_uppercase().as_str() {
+            "VXL" => {
+                Box::new(VXLSchematicOutputStream::new(stream, AxisOrder::preferred(), boundary))
+            },
+            "MOJANG" => {
+                Box::new(MojangSchematicOutputStream::new(stream))
+            },
+            "SPONGE" => {
+                Box::new(SpongeSchematicOutputStream::new(stream, boundary))
+            },
+            "AUTO" => {
+                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Must specify a concrete type when saving"));
+            },
+            _ => return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Unknown format: {}", format))),
+        };
+
+        if let Some(reader) = &mut self.reader {
+            reader.transfer_into(output_schematic_stream).map_err(|e| PyErr::new::<PyRuntimeError, _>(e))?;
+            Ok(())
         } else {
             Err(PyErr::new::<PyRuntimeError, _>("Reader is closed"))
         }
