@@ -81,6 +81,11 @@ impl<R: Read> MCEditSchematicInputStream<R> {
 
             self.boundary = Some(Boundary::new_from_size(width as i32, height as i32, length as i32));
             self.blocks = Some(Box::new(PagedBlockStore::new_for_fixed_boundary(self.boundary.unwrap().clone())));
+
+            if self.boundary.unwrap().volume() == 0 {
+                return Err("MCEdit: Boundary volume is zero, cannot read blocks".to_string());
+            }
+
             let block_store = self.blocks.as_mut().unwrap();
 
             // "blocks" to u8 array, then use read_block_id to get the block id for each position in the boundary
@@ -98,6 +103,9 @@ impl<R: Read> MCEditSchematicInputStream<R> {
             }
             let mut idx: usize = 0;
             for position in self.boundary.unwrap().iter(AxisOrder::YZX) {
+                if block_ids.len() <= idx || block_data.len() <= idx {
+                    return Err(format!("MCEdit: Not enough block data for position {:?} at index {}", position, idx));
+                }
                 let block_id = Self::read_block_id(&block_ids, idx, add_blocks.as_deref());
                 let block_data = block_data[idx] & 0x0F;
 
@@ -151,7 +159,7 @@ impl<R: Read> MCEditSchematicInputStream<R> {
 
 
 impl<R: Read> SchematicInputStream for MCEditSchematicInputStream<R> {
-    fn read(&mut self, buffer: &mut Vec<Block>, offset: usize, length: usize) -> Result<Option<usize>, String> {
+    fn read(&mut self, buffer: &mut Vec<Block>, _offset: usize, length: usize) -> Result<Option<usize>, String> {
         if !self.header_read {
             self.read_nbt()?;
             self.header_read = true;

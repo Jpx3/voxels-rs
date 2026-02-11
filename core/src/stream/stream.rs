@@ -10,7 +10,7 @@ pub trait SchematicInputStream {
     
     fn read_next(&mut self, limit: usize) -> Result<Option<Vec<Block>>, String> {
         let mut buffer = Vec::with_capacity(limit);
-        if let Some(read_blocks) = self.read(&mut buffer, 0, limit)? {
+        if let Some(_read_blocks) = self.read(&mut buffer, 0, limit)? {
             Ok(Some(buffer))
         } else {
             Ok(None)
@@ -51,7 +51,7 @@ pub trait SchematicInputStream {
         let mut blocks = Vec::new();
         loop {
             let mut chunk = Vec::new();
-            if let Some(read_blocks) = self.read(&mut chunk, 0, 4096)? {
+            if let Some(_read_blocks) = self.read(&mut chunk, 0, 4096)? {
                 blocks.extend(chunk);
             } else {
                 break;

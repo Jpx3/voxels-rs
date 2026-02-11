@@ -36,7 +36,7 @@ impl SchematicInputStream for AnySchematicInputStream {
                     to_remove.push(i);
                     self.closed = true;
                 }
-                Err(e) => {
+                Err(_e) => {
                     to_remove.push(i);
                 }
             }

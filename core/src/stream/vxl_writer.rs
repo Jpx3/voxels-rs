@@ -214,10 +214,10 @@ impl<W: Write> VXLSchematicOutputStream<W> {
 
 #[cfg(test)]
 mod test {
+    use crate::common::{AxisOrder, Block, BlockState, Boundary, Region};
+    use crate::stream::stream::SchematicOutputStream;
     use std::io::{Cursor, Read};
     use std::sync::Arc;
-    use crate::common::{AxisOrder, Block, BlockPosition, BlockState, Boundary, Region};
-    use crate::stream::stream::SchematicOutputStream;
 
     #[test]
     fn test_vxl_writer() {

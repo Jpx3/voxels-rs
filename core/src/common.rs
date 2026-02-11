@@ -5,7 +5,6 @@ use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::string::ToString;
 use std::sync::{Arc, OnceLock};
-use crate::store::paging::Page;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum Axis {
@@ -42,7 +41,6 @@ pub struct Boundary {
 pub struct BlockState {
     pub name: String,
     pub properties: Vec<(String, String)>,
-
     cached_hash: u64,
 }
 
@@ -71,29 +69,50 @@ impl PartialEq for BlockState {
 
 impl Display for BlockState {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.to_string())
+        if self.properties.is_empty() {
+            write!(f, "{}", self.name)
+        } else {
+            let mut props: Vec<String> = self
+                .properties
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, v))
+                .collect();
+            props.sort();
+            write!(f, "{}[{}]", self.name, props.join(","))
+        }
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Block {
     pub position: BlockPosition,
     pub state: Arc<BlockState>,
 }
 
+impl Display for Block {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Block(state: {}, position: {})", self.state, self.position)
+    }
+}
+
+impl Debug for Block {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Block")
+            .field("state", &self.state)
+            .field("position", &self.position)
+            .finish()
+    }
+}
+
+impl Display for BlockPosition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {}, {})", self.x, self.y, self.z)
+    }
+}
+
 pub trait Region {
     fn contains(&self, pos: &BlockPosition) -> bool;
     fn iter(&self, axis_order: AxisOrder) -> Box<dyn Iterator<Item = BlockPosition> + '_>;
-}
-
-impl Axis {
-    fn to_string(&self) -> &str {
-        match self {
-            Axis::X => "X",
-            Axis::Y => "Y",
-            Axis::Z => "Z",
-        }
-    }
 }
 
 impl AxisOrder {
@@ -128,28 +147,6 @@ impl AxisOrder {
             index = index * dim + coord;
         }
         index
-    }
-
-    fn compare(&self, a: &BlockPosition, b: &BlockPosition) -> Ordering {
-        for axis in self.axis() {
-            let a_value: i32 = a.select(&axis);
-            let b_value: i32 = b.select(&axis);
-            if a_value != b_value {
-                return i32::cmp(&a_value, &b_value);
-            }
-        }
-        Ordering::Equal
-    }
-
-    fn to_string(&self) -> &str {
-        match self {
-            AxisOrder::XYZ => "XYZ",
-            AxisOrder::XZY => "XZY",
-            AxisOrder::YXZ => "YXZ",
-            AxisOrder::YZX => "YZX",
-            AxisOrder::ZXY => "ZXY",
-            AxisOrder::ZYX => "ZYX",
-        }
     }
 }
 
@@ -294,20 +291,6 @@ impl Boundary {
         Boundary::new_from_min_max(
             new_min_x, new_min_y, new_min_z,
             new_max_x, new_max_y, new_max_z,
-        )
-    }
-
-    fn to_json(&self) -> String {
-        format!(
-            r#"{{"min_x": {}, "min_y": {}, "min_z": {}, "d_x": {}, "d_y": {}, "d_z": {}}}"#,
-            self.min_x, self.min_y, self.min_z, self.d_x, self.d_y, self.d_z
-        )
-    }
-
-    fn to_string(&self) -> String {
-        format!(
-            "Boundary(min: ({}, {}, {}), dimensions: ({}, {}, {}))",
-            self.min_x, self.min_y, self.min_z, self.d_x, self.d_y, self.d_z
         )
     }
 }
@@ -590,6 +573,13 @@ impl BlockState {
             }
             return Ok(BlockState::from_name(input.trim().to_string()));
         }
+        if input.matches(':').count() != 1 {
+            return Err(format!(
+                "Malformed BlockState string: '{}' must contain exactly one ':' separating namespace and type",
+                input
+            ));
+        }
+
         let split_index = input.find("[").unwrap();
         let type_name = &input[0..split_index];
         let raw_type_name = if let Some(stripped) = type_name.strip_prefix("minecraft:") {
@@ -673,15 +663,14 @@ impl Block {
         )
     }
 
-    fn to_string(&self) -> String {
-        format!(
-            "Block(state: {}, position: {})",
-            self.state.to_string(),
-            self.position.to_string()
-        )
-    }
+    // fn to_string(&self) -> String {
+    //     format!(
+    //         "Block(state: {}, position: {})",
+    //         self.state.to_string(),
+    //         self.position.to_string()
+    //     )
+    // }
 }
-
 
 impl Region for Boundary {
     fn contains(&self, pos: &BlockPosition) -> bool {

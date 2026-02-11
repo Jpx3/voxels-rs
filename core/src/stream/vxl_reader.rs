@@ -20,7 +20,7 @@ pub struct VXLSchematicInputStream<R: Read> {
 }
 
 impl<R: Read> SchematicInputStream for VXLSchematicInputStream<R> {
-    fn read(&mut self, buffer: &mut Vec<Block>, offset: usize, length: usize) -> Result<Option<usize>, String> {
+    fn read(&mut self, buffer: &mut Vec<Block>, _offset: usize, length: usize) -> Result<Option<usize>, String> {
         if !self.header_read {
             self.read_header()?;
         }
@@ -44,7 +44,7 @@ impl<R: Read> SchematicInputStream for VXLSchematicInputStream<R> {
 
             if let Some(state) = &self.current_run_state {
                 let mut pos_iter = boundary.iter(axis_order).skip(self.read_blocks);
-                for r in 0..attempt_to_process {
+                for _ in 0..attempt_to_process {
                     let pos = pos_iter.next().ok_or_else(|| format!("VXL: Ran out of positions in boundary after reading {} blocks", self.read_blocks))?;
                     if !state.is_air() {
                         buffer.push(Block {
