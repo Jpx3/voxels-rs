@@ -90,6 +90,12 @@ impl<R: Read> MCEditSchematicInputStream<R> {
 
             let mut block_state_cache = HashMap::new();
 
+            if block_ids.len() != block_data.len() {
+                return Err("MCEdit: 'Blocks' and 'Data' arrays must be the same length".to_string());
+            }
+            if block_ids.len() != self.boundary.unwrap().volume() as usize {
+                return Err(format!("MCEdit: 'Blocks' array length {} does not match expected volume {}", block_ids.len(), self.boundary.unwrap().volume()));
+            }
             let mut idx: usize = 0;
             for position in self.boundary.unwrap().iter(AxisOrder::YZX) {
                 let block_id = Self::read_block_id(&block_ids, idx, add_blocks.as_deref());
