@@ -28,39 +28,39 @@ impl<R: Read> MCEditSchematicInputStream<R> {
 
     fn read_nbt(&mut self) -> Result<(), String> {
         if self.header_read {
-            return Err("Sponge: NBT header has already been read".to_string());
+            return Err("MCEdit: NBT header has already been read".to_string());
         }
         if self.blocks.is_some() {
-            return Err("Sponge: Blocks have already been read, cannot read NBT header".to_string());
+            return Err("MCEdit: Blocks have already been read, cannot read NBT header".to_string());
         }
 
-        let result: Value = fastnbt::from_reader(&mut self.reader).map_err(|e| format!("Sponge: Failed to read NBT data: {}", e))?;
+        let result: Value = fastnbt::from_reader(&mut self.reader).map_err(|e| format!("MCEdit: Failed to read NBT data: {}", e))?;
 
         if let Value::Compound(root) = result {
             let width = if let Some(Value::Short(w)) = root.get("Width") {
                 *w as usize
             } else {
-                return Err("Sponge: Missing or invalid 'Width' tag".to_string());
+                return Err("MCEdit: Missing or invalid 'Width' tag".to_string());
             };
             let height = if let Some(Value::Short(h)) = root.get("Height") {
                 *h as usize
             } else {
-                return Err("Sponge: Missing or invalid 'Height' tag".to_string());
+                return Err("MCEdit: Missing or invalid 'Height' tag".to_string());
             };
             let length = if let Some(Value::Short(l)) = root.get("Length") {
                 *l as usize
             } else {
-                return Err("Sponge: Missing or invalid 'Length' tag".to_string());
+                return Err("MCEdit: Missing or invalid 'Length' tag".to_string());
             };
             let blocks = if let Some(Value::ByteArray(blocks)) = root.get("Blocks") {
                 blocks.clone()
             } else {
-                return Err("Sponge: Missing or invalid 'Blocks' tag".to_string());
+                return Err("MCEdit: Missing or invalid 'Blocks' tag".to_string());
             };
             let data = if let Some(Value::ByteArray(data)) = root.get("Data") {
                 data.clone()
             } else {
-                return Err("Sponge: Missing or invalid 'Data' tag".to_string());
+                return Err("MCEdit: Missing or invalid 'Data' tag".to_string());
             };
             let add_blocks = if let Some(Value::ByteArray(add_blocks)) = root.get("AddBlocks") {
                 Some(add_blocks.clone())
@@ -108,10 +108,10 @@ impl<R: Read> MCEditSchematicInputStream<R> {
                             block_state_cache.insert(block_cache_key, Arc::new(BlockState::from_string(block_name)?));
                         } else {
                             convert_legacy_data_to_modern_properties(block_id as usize, block_data).map(|state| {
-                                println!("Sponge: Converted legacy block ID {} with data {} to modern state {:?}", block_id, block_data, state);
+                                println!("MCEdit: Converted legacy block ID {} with data {} to modern state {:?}", block_id, block_data, state);
                                 block_state_cache.insert(block_cache_key, Arc::new(state));
                             }).unwrap_or_else(|| {
-                               println!("Sponge: Warning - Unrecognized block ID {} with data {}, treating as air", block_id, block_data);
+                               println!("MCEdit: Warning - Unrecognized block ID {} with data {}, treating as air", block_id, block_data);
                                 block_state_cache.insert(block_cache_key, Arc::new(BlockState::air()));
                             });
                         }
@@ -122,7 +122,7 @@ impl<R: Read> MCEditSchematicInputStream<R> {
                 idx += 1;
             }
         } else {
-            return Err("Sponge: Root NBT tag is not a compound".to_string());
+            return Err("MCEdit: Root NBT tag is not a compound".to_string());
         }
         Ok(())
     }
@@ -151,7 +151,7 @@ impl<R: Read> SchematicInputStream for MCEditSchematicInputStream<R> {
             self.header_read = true;
         }
         if self.boundary.is_none() || self.blocks.is_none() {
-            return Err("Sponge: Header not properly read".into());
+            return Err("MCEdit: Header not properly read".into());
         }
         let mut blocks_written = 0;
         let boundary = self.boundary.unwrap();

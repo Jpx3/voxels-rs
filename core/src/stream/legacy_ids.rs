@@ -223,7 +223,9 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
         }
 
         _ => {
-            if let Some(block_type) = get_legacy_type(id, data) {
+            if let Some(block_type) = get_legacy_type(id, 0) {
+                Some(BlockState::new(block_type, vec![]))
+            } else if let Some(block_type) = get_legacy_type(id, data) {
                 Some(BlockState::new(block_type, vec![]))
             } else {
                 None
