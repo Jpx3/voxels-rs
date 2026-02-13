@@ -5,7 +5,7 @@ use crate::stream::stream::SchematicInputStream;
 use fastnbt::Value;
 use std::collections::HashMap;
 use std::io::Read;
-use std::sync::Arc;
+use std::rc::Rc;
 
 pub struct MCEditSchematicInputStream<R: Read> {
     reader: R,
@@ -119,14 +119,14 @@ impl<R: Read> MCEditSchematicInputStream<R> {
                             None
                         }.or_else(|| get_legacy_type(block_id as usize, block_data));
                         if let Some(block_name) = block_name {
-                            block_state_cache.insert(block_cache_key, Arc::new(BlockState::from_string(block_name)?));
+                            block_state_cache.insert(block_cache_key, Rc::new(BlockState::from_string(block_name)?));
                         } else {
                             convert_legacy_data_to_modern_properties(block_id as usize, block_data).map(|state| {
                                 println!("MCEdit: Converted legacy block ID {} with data {} to modern state {:?}", block_id, block_data, state);
-                                block_state_cache.insert(block_cache_key, Arc::new(state));
+                                block_state_cache.insert(block_cache_key, Rc::new(state));
                             }).unwrap_or_else(|| {
                                println!("MCEdit: Warning - Unrecognized block ID {} with data {}, treating as air", block_id, block_data);
-                                block_state_cache.insert(block_cache_key, Arc::new(BlockState::air()));
+                                block_state_cache.insert(block_cache_key, Rc::new(BlockState::air()));
                             });
                         }
                     }
@@ -182,7 +182,7 @@ impl<R: Read> SchematicInputStream for MCEditSchematicInputStream<R> {
                     if !block_state.is_air() {
                         let block = Block {
                             position: pos,
-                            state: Arc::clone(&block_state),
+                            state: Rc::clone(&block_state),
                         };
                         buffer.push(block);
                         blocks_written += 1;

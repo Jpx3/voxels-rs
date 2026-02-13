@@ -1,14 +1,14 @@
 use crate::common::{AxisOrder, Block, BlockPosition, BlockState, Boundary, Region};
+use crate::stream::stream::SchematicOutputStream;
 use serde::Serialize;
 use std::collections::HashMap;
-use std::sync::Arc;
-use crate::stream::stream::SchematicOutputStream;
+use std::rc::Rc;
 
 pub struct MojangSchematicOutputStream<W: std::io::Write> {
     writer: W,
     block: HashMap<BlockPosition, BlockEntry>,
     palette: Vec<PaletteEntry>,
-    palette_map: HashMap<Arc<BlockState>, i32>,
+    palette_map: HashMap<Rc<BlockState>, i32>,
     boundary: Boundary
 }
 
@@ -23,18 +23,18 @@ impl<W: std::io::Write> MojangSchematicOutputStream<W> {
         }
     }
 
-    fn palette_idx_from_state(&mut self, state: &Arc<BlockState>) -> i32 {
+    fn palette_idx_from_state(&mut self, state: &Rc<BlockState>) -> i32 {
         if let Some(&idx) = self.palette_map.get(state) {
             idx
         } else {
             let idx = self.palette.len() as i32;
             let name = state.name();
-            let props = state.properties();
+            let props = state.properties_map();
             self.palette.push(PaletteEntry {
                 name,
                 properties: props,
             });
-            self.palette_map.insert(Arc::clone(state), idx);
+            self.palette_map.insert(Rc::clone(state), idx);
             idx
         }
     }
@@ -88,7 +88,7 @@ impl<W: std::io::Write> SchematicOutputStream for MojangSchematicOutputStream<W>
     }
 
     fn complete(&mut self) -> Result<(), String> {
-        let air_state_index = self.palette_idx_from_state(&BlockState::air_arc());
+        let air_state_index = self.palette_idx_from_state(&BlockState::air_rc());
         let mut full_block_list = Vec::new();
         for pos in self.boundary.iter(AxisOrder::XYZ) {
             let block_entry = self.block.get(&pos);

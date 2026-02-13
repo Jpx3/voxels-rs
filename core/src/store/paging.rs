@@ -1,38 +1,17 @@
 use crate::common::AxisOrder;
 
 pub trait Page {
-    fn load(&self, x: i32, y: i32, z: i32) -> Option<usize>;
+    fn load(&self, x: i32, y: i32, z: i32) -> Option<u16>;
 
-    fn store(&mut self, x: i32, y: i32, z: i32, state: usize) -> Result<(), String>;
+    fn store(&mut self, x: i32, y: i32, z: i32, state: u16) -> Result<(), String>;
 
     fn erase(&mut self, x: i32, y: i32, z: i32) -> Result<(), String>;
-
-    fn nnz(&self) -> usize;
-
-    fn deep_equals(&self, other: &dyn Page) -> bool {
-        if self.nnz() != other.nnz() {
-            return false;
-        }
-        // Note: This is a naive implementation and may not be efficient for large pages.
-        for x in 0.. {
-            for y in 0.. {
-                for z in 0.. {
-                    let self_value = self.load(x, y, z);
-                    let other_value = other.load(x, y, z);
-                    if self_value != other_value {
-                        return false;
-                    }
-                }
-            }
-        }
-        true
-    }
 }
 
 pub struct ArrayPage {
     size_x: usize, size_y: usize, size_z: usize,
     axis_order : AxisOrder,
-    data: Vec<usize>,
+    data: Vec<u16>,
     nnz: usize,
 }
 
@@ -63,14 +42,14 @@ impl ArrayPage {
 }
 
 impl Page for ArrayPage {
-    fn load(&self, x: i32, y: i32, z: i32) -> Option<usize> {
+    fn load(&self, x: i32, y: i32, z: i32) -> Option<u16> {
         match self.data[self.index(x, y, z)?] {
             0 => None,
             state => Some(state - 1),
         }
     }
 
-    fn store(&mut self, x: i32, y: i32, z: i32, state: usize) -> Result<(), String> {
+    fn store(&mut self, x: i32, y: i32, z: i32, state: u16) -> Result<(), String> {
         let idx = self.index(x, y, z)
             .ok_or_else(|| format!("Out of bounds: ({}, {}, {})", x, y, z))?;
         let current = self.data[idx];
@@ -92,9 +71,5 @@ impl Page for ArrayPage {
         } else {
             Err("No block to erase at given coordinates".to_string())
         }
-    }
-
-    fn nnz(&self) -> usize {
-        self.nnz
     }
 }

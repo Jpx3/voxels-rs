@@ -7,6 +7,7 @@ use robusta_jni::jni::objects::{AutoLocal, JObject};
 use robusta_jni::jni::objects::{GlobalRef, JFieldID};
 use robusta_jni::jni::JNIEnv;
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::Arc;
 use voxels_core::common::{Block, BlockPosition, BlockState, Boundary};
 use voxels_core::stream::stream::{SchematicInputStream, SchematicOutputStream};
@@ -25,7 +26,7 @@ pub struct JniCache {
     // for Rust -> Java
     states: HashMap<BlockState, GlobalRef>,
     // for Java -> Rust
-    reverse_states: Box<HashMap<i64, Arc<BlockState>>>,
+    reverse_states: Box<HashMap<i64, Rc<BlockState>>>,
     pub block_class: GlobalRef,
     pub block_pos_class: GlobalRef,
     pub block_pos_field: JFieldID<'static>,
@@ -82,12 +83,12 @@ impl JniCache {
     pub fn block_state_java_to_rust<'env>(
         &mut self, env: &JNIEnv<'env>,
         jstate: JObject,
-    ) -> JniResult<Arc<BlockState>> {
+    ) -> JniResult<Rc<BlockState>> {
         let internal_id = env.get_field_unchecked(
             jstate, self.__internal_id_field, "J".parse()?
         )?.j()? as i64;
         let state = self.reverse_states.entry(internal_id).or_insert_with(|| {
-            Arc::new(BlockState::from_jni(env, jstate).unwrap())
+            Rc::new(BlockState::from_jni(env, jstate).unwrap())
         });
         Ok(state.clone())
     }
@@ -110,7 +111,7 @@ impl JniCache {
             jposition,
             self.pos_z_field,
             "I".parse()?)?.i()?;
-        Ok(BlockPosition { x, y, z })
+        Ok(BlockPosition::new( x, y, z))
     }
 
     pub fn block_from_java(
@@ -139,9 +140,9 @@ fn override_block_position(
     block_pos: &BlockPosition,
     cache: &JniCache,
 ) -> JniResult<()> {
-    env.set_field_unchecked(jni_obj, cache.pos_x_field, block_pos.x.into())?;
-    env.set_field_unchecked(jni_obj, cache.pos_y_field, block_pos.y.into())?;
-    env.set_field_unchecked(jni_obj, cache.pos_z_field, block_pos.z.into())?;
+    env.set_field_unchecked(jni_obj, cache.pos_x_field, block_pos.x().into())?;
+    env.set_field_unchecked(jni_obj, cache.pos_y_field, block_pos.y().into())?;
+    env.set_field_unchecked(jni_obj, cache.pos_z_field, block_pos.z().into())?;
     Ok(())
 }
 
@@ -654,9 +655,9 @@ impl JNITranslation for BlockPosition {
             class,
             "(III)V",
             &[
-                self.x.into(),
-                self.y.into(),
-                self.z.into(),
+                self.x().into(),
+                self.y().into(),
+                self.z().into(),
             ],
         )?;
         Ok(obj)
@@ -666,7 +667,7 @@ impl JNITranslation for BlockPosition {
         let x = env.get_field(obj, "x", "I")?.i()?;
         let y = env.get_field(obj, "y", "I")?.i()?;
         let z = env.get_field(obj, "z", "I")?.i()?;
-        Ok(BlockPosition { x, y, z })
+        Ok(BlockPosition::new(x, y, z))
     }
 }
 
@@ -674,11 +675,11 @@ impl JNITranslation for BlockPosition {
 impl JNITranslation for BlockState {
     fn to_jni<'env>(&self, env: &JNIEnv<'env>) -> JniResult<JObject<'env>> {
         let class = env.find_class("de/richy/voxels/BlockState")?;
-        let jtype_name = env.new_string(&self.name)?;
+        let jtype_name = env.new_string(self.name())?;
         let jproperties_class = env.find_class("java/util/HashMap")?;
         let jproperties = env.new_object(jproperties_class, "()V", &[])?;
 
-        for (key, value) in &self.properties {
+        for (key, value) in self.properties() {
             let jkey = env.new_string(key)?;
             let jvalue = env.new_string(value)?;
             env.call_method(

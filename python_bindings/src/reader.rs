@@ -1,12 +1,11 @@
-use voxels_core::stream::stream::SchematicOutputStream;
 use crate::pystream::{reader_from, writer_from};
+use crate::shared::{PyBlock, PyBoundary};
 use flate2::bufread::GzDecoder;
-use pyo3::prelude::*;
-use std::io::{BufReader, BufWriter, Read};
 use flate2::write::GzEncoder;
 use pyo3::exceptions::{PyRuntimeError, PyStopIteration};
-use pyo3::ffi::PyObject;
-use pyo3::types::{PyIterator, PyString};
+use pyo3::prelude::*;
+use pyo3::types::PyString;
+use std::io::{BufReader, BufWriter};
 use voxels_core::common::AxisOrder;
 use voxels_core::stream::any_reader::AnySchematicInputStream;
 use voxels_core::stream::mojang_reader::MojangSchematicInputStream;
@@ -14,15 +13,15 @@ use voxels_core::stream::mojang_writer::MojangSchematicOutputStream;
 use voxels_core::stream::sponge_reader::SpongeSchematicInputStream;
 use voxels_core::stream::sponge_writer::SpongeSchematicOutputStream;
 use voxels_core::stream::stream::SchematicInputStream;
+use voxels_core::stream::stream::SchematicOutputStream;
 use voxels_core::stream::vxl_reader::VXLSchematicInputStream;
 use voxels_core::stream::vxl_writer::VXLSchematicOutputStream;
-use crate::shared::{PyBlock, PyBoundary};
 
 #[pyclass(unsendable)]
 pub struct VoxelReader {
     reader: Option<Box<dyn SchematicInputStream>>,
     entered: bool,
-    iterator_called: bool,
+    iterator_called: bool
 }
 
 impl VoxelReader {
@@ -32,13 +31,42 @@ impl VoxelReader {
         VoxelReader {
             reader: Some(reader),
             entered: false,
-            iterator_called: false,
+            iterator_called: false
         }
     }
 }
 
 #[pymethods]
 impl VoxelReader {
+    // schematic.iterate_blocks(lambda block: None)
+    #[pyo3(signature = (callback))]
+    fn iterate_blocks(&mut self, callback: &Bound<'_, PyAny>) -> PyResult<()> {
+        if !self.entered {
+            return Err(PyErr::new::<PyRuntimeError, _>("Cannot iterate without entering context"));
+        }
+        if self.reader.is_none() {
+            return Err(PyErr::new::<PyRuntimeError, _>("Reader is closed"));
+        }
+        if self.iterator_called {
+            return Err(PyErr::new::<PyRuntimeError, _>("Iterator already called"));
+        }
+        if let Some(reader) = &mut self.reader {
+            reader.read_next(1024).map_err(|e| PyErr::new::<PyRuntimeError, _>(e)).and_then(|opt| {
+                if let Some(blocks) = opt {
+                    for block in blocks {
+                        let py_block = PyBlock::from(block);
+                        let _ = callback.call1((py_block,));
+                    }
+                    Ok(())
+                } else {
+                    Ok(())
+                }
+            })
+        } else {
+            Err(PyErr::new::<PyRuntimeError, _>("Reader is closed"))
+        }
+    }
+
     fn __enter__<'py>(slf: Py<Self>, py: Python<'py>) -> PyResult<Py<Self>> {
         let mut ref_mut = slf.borrow_mut(py);
         if ref_mut.entered {
@@ -98,15 +126,27 @@ impl VoxelReader {
     }
 
     fn iter_bulks<'py>(slf: Py<Self>, py: Python<'py>) -> PyResult<Py<Self>> {
-        let mut selff = slf.borrow_mut(py);
-        if selff.reader.is_none() {
+        let mut rslf = slf.borrow_mut(py);
+        if rslf.reader.is_none() {
             return Err(PyErr::new::<PyRuntimeError, _>("Reader is closed"));
         }
-        if selff.iterator_called {
+        if rslf.iterator_called {
             return Err(PyErr::new::<PyRuntimeError, _>("Iterator already called"));
         }
-        selff.iterator_called = true;
-        Ok(selff.into())
+        rslf.iterator_called = true;
+        Ok(rslf.into())
+    }
+
+    fn iter_blocks<'py>(slf: Py<Self>, py: Python<'py>) -> PyResult<Py<Self>> {
+        let mut rslf = slf.borrow_mut(py);
+        if rslf.reader.is_none() {
+            return Err(PyErr::new::<PyRuntimeError, _>("Reader is closed"));
+        }
+        if rslf.iterator_called {
+            return Err(PyErr::new::<PyRuntimeError, _>("Iterator already called"));
+        }
+        rslf.iterator_called = true;
+        Ok(rslf.into())
     }
 
     #[inline]
@@ -125,7 +165,7 @@ impl VoxelReader {
             return Err(PyErr::new::<PyRuntimeError, _>("Iterator not initialized, call iter_bulks() first"));
         }
         if let Some(reader) = &mut self.reader {
-            reader.read_next(1024).map_err(|e| PyErr::new::<PyRuntimeError, _>(e)).and_then(|opt| {
+            reader.read_next(1024 * 8).map_err(|e| PyErr::new::<PyRuntimeError, _>(e)).and_then(|opt| {
                 if let Some(blocks) = opt {
                     Ok(blocks.into_iter().map(|b| {
                         PyBlock::from(b)
@@ -205,13 +245,13 @@ pub fn open(input: &Bound<'_, PyAny>) -> PyResult<VoxelReader> {
     // see if input has a "type" attribute that is of type SchematicType (in python)
     let type_name = input.getattr("type").ok().and_then(|t| {
         if t.is_instance_of::<PyString>() {
-            let s = t.downcast::<PyString>().unwrap();
+            let s = t.cast_into::<PyString>().unwrap();
             Some(s.to_str().ok()?.to_string())
         } else if t.hasattr("name").ok()? {
             let name_attr = t.getattr("name").ok()?;
             if name_attr.is_instance_of::<PyString>() {
-                let s = name_attr.downcast::<PyString>().unwrap();
-                Some(s.to_str().ok()?.to_string())
+                let r = name_attr.cast_into::<PyString>().ok()?;
+                Some(r.to_str().ok()?.to_string())
             } else {
                 None
             }

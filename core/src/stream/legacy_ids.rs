@@ -151,6 +151,31 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
             ]))
         }
 
+        // Wooden Slab
+        126 => {
+            let type_name = match data & 7 {
+                0 => "oak",
+                1 => "spruce",
+                2 => "birch",
+                3 => "jungle",
+                4 => "acacia",
+                5 => "dark_oak",
+                _ => "oak",
+            };
+            let half = if data & 8 != 0 { "top" } else { "bottom" };
+            Some(BlockState::new(format!("minecraft:{}_slab", type_name), vec![
+                ("half".to_string(), half.to_string()),
+            ]))
+        }
+
+        // Sandstone & Purpur Slabs
+        182 | 205 => {
+            let half = if data & 8 != 0 { "top" } else { "bottom" };
+            Some(BlockState::new(get_legacy_type(id, 0)?, vec![
+                ("half".to_string(), half.to_string()),
+            ]))
+        }
+
         // Buttons
         77 | 143 => {
             let facing = match data & 7 {
@@ -310,7 +335,8 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
         }
 
         // Repeater
-        356 => {
+        93 | 94 => {
+            let powered = id == 94;
             let facing = match data & 3 {
                 0 => "north",
                 1 => "south",
@@ -319,11 +345,37 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
                 _ => "north",
             };
             let delay = ((data >> 2) & 3) + 1;
-            let locked = data & 8 != 0;
             Some(BlockState::new(get_legacy_type(id, 0)?, vec![
                 ("facing".to_string(), facing.to_string()),
                 ("delay".to_string(), delay.to_string()),
-                ("locked".to_string(), locked.to_string()),
+                ("powered".to_string(), powered.to_string()),
+            ]))
+        }
+
+        18 => {
+            /*
+              "18": "minecraft:oak_leaves",
+              "18:1": "minecraft:spruce_leaves",
+              "18:2": "minecraft:birch_leaves",
+              "18:3": "minecraft:jungle_leaves",
+              "18:4": "minecraft:acacia_leaves",
+              "18:5": "minecraft:dark_oak_leaves",
+             */
+
+            let type_name = match (data & 3) % 4 {
+                0 => "oak",
+                1 => "spruce",
+                2 => "birch",
+                3 => "jungle",
+                4 => "acacia",
+                5 => "dark_oak",
+                _ => "oak",
+            };
+            let decayable = data & 4 == 0;
+            let check_decay = data & 8 == 0;
+            Some(BlockState::new(format!("minecraft:{}_leaves", type_name), vec![
+                ("decayable".to_string(), decayable.to_string()),
+                ("check_decay".to_string(), check_decay.to_string()),
             ]))
         }
 

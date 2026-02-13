@@ -44,14 +44,14 @@ impl Write for PyStreamAdapter {
 }
 
 pub fn reader_from(input: &Bound<'_, PyAny>) -> PyResult<Box<dyn Read>> {
-    if let Ok(py_str) = input.downcast::<PyString>() {
+    if let Ok(py_str) = input.cast::<PyString>() {
         let s = py_str.to_str()?;
         if s.starts_with("http") {
             Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>("HTTP not linked"))
         } else {
             Ok(Box::new(File::open(s)?))
         }
-    } else if let Ok(py_bytes) = input.downcast::<PyBytes>() {
+    } else if let Ok(py_bytes) = input.cast::<PyBytes>() {
         Ok(Box::new(Cursor::new(py_bytes.as_bytes().to_vec())))
     } else if input.hasattr("read")? {
         Ok(Box::new(PyStreamAdapter { obj: input.clone().unbind() }))

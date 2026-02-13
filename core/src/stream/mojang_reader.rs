@@ -4,7 +4,7 @@ use crate::stream::stream::SchematicInputStream;
 use fastnbt::stream::{Parser, Value};
 use fastnbt::Tag;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::rc::Rc;
 
 pub struct MojangSchematicInputStream<R: std::io::Read> {
     parser: Parser<R>,
@@ -150,7 +150,7 @@ impl<R: std::io::Read> MojangSchematicInputStream<R> {
                     depth -= 1;
                     if depth == 1 {
                         let state = BlockState::from_name_and_properties(&current_name, &props);
-                        palette.insert(palette.len() as isize, Arc::new(state));
+                        palette.insert(palette.len() as isize, Rc::new(state));
                         props.clear();
                     }
                 }

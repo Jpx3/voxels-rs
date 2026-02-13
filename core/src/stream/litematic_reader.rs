@@ -4,7 +4,7 @@ use crate::stream::stream::SchematicInputStream;
 use fastnbt::stream::{Parser, Value};
 use fastnbt::Tag;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::rc::Rc;
 
 pub struct LitematicaSchematicInputStream<R: std::io::Read> {
     parser: Parser<R>,
@@ -22,7 +22,7 @@ struct LoadedLitematicaRegion {
     /// Offset of the region from origin (x, y, z)
     origin: (i32, i32, i32),
     /// The decoded palette
-    palette: Vec<Arc<BlockState>>,
+    palette: Vec<Rc<BlockState>>,
     /// The bit array holding block indices. If None, the region is uniform (palette[0]).
     bit_array: Option<LitematicaBitArray>,
     /// Current iteration cursor (x, y, z) local to the region
@@ -76,10 +76,10 @@ impl<R: std::io::Read> LitematicaSchematicInputStream<R> {
                             return Ok(());
                         }
                     }
-                    current_depth -= 1;
-                    if current_depth < 0 {
+                    if current_depth == 0 {
                         return Err("NBT Structure Error: Negative depth".into());
                     }
+                    current_depth -= 1;
                 }
                 Err(e) if e.is_eof() => {
                     self.finished = true;
@@ -186,7 +186,7 @@ impl<R: std::io::Read> LitematicaSchematicInputStream<R> {
         Ok(vec)
     }
 
-    fn read_palette_list(&mut self) -> Result<Vec<Arc<BlockState>>, String> {
+    fn read_palette_list(&mut self) -> Result<Vec<Rc<BlockState>>, String> {
         let mut palette = Vec::new();
         // The parser is currently at the List Start.
         // We iterate until ListEnd.
@@ -229,7 +229,7 @@ impl<R: std::io::Read> LitematicaSchematicInputStream<R> {
                         // End of one palette entry compound
                         // depth 1 means we are back in the List
                         let state = BlockState::from_name_and_properties(&current_name, &props);
-                        palette.push(Arc::new(state));
+                        palette.push(Rc::new(state));
                     }
                 },
 
@@ -263,9 +263,9 @@ impl<R: std::io::Read> SchematicInputStream for LitematicaSchematicInputStream<R
             let index = (y * sz + z) * sx + x;
             let state = if let Some(bits) = &region.bit_array {
                 let palette_idx = bits.get(index).unwrap_or(0) as usize;
-                region.palette.get(palette_idx).cloned().unwrap_or_else(|| Arc::new(BlockState::air()))
+                region.palette.get(palette_idx).cloned().unwrap_or_else(|| Rc::new(BlockState::air()))
             } else {
-                region.palette.get(0).cloned().unwrap_or_else(|| Arc::new(BlockState::air()))
+                region.palette.get(0).cloned().unwrap_or_else(|| Rc::new(BlockState::air()))
             };
 
             if !state.is_air() {

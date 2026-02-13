@@ -46,7 +46,7 @@ impl<W: Write> SchematicOutputStream for SpongeSchematicOutputStream<W> {
     fn complete(&mut self) -> Result<(), String> {
         let boundary = self.boundary.ok_or("Sponge: Boundary must be set before closing")?;
         let mut palette = HashMap::new();
-        palette.insert(BlockState::air_arc(), 0);
+        palette.insert(BlockState::air_rc(), 0);
         let mut block_data_bytes = Vec::new();
         for pos in boundary.iter(AxisOrder::YZX) {
             if !self.block_store.contains(&pos) {

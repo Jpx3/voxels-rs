@@ -1,13 +1,12 @@
-use std::sync::Arc;
-use numpy::ndarray::Array1;
-use numpy::{IntoPyArray, PyArray1};
+use numpy::PyArray1;
 use pyo3::{pyclass, pymethods, Bound, PyResult, Python};
+use std::rc::Rc;
 use voxels_core::common::{Block, BlockPosition, BlockState, Boundary};
 
-#[pyclass]
+#[pyclass(unsendable)]
 pub struct PyBlock {
     pub position: BlockPosition,
-    pub state: Arc<BlockState>,
+    pub state: Rc<BlockState>,
 }
 
 impl From<Block> for PyBlock {
@@ -38,38 +37,38 @@ impl PyBlock {
     }
 }
 
-#[pyclass]
+#[pyclass(unsendable)]
 pub struct PyBlockState {
-    owning: Arc<BlockState>,
+    owning: Rc<BlockState>,
 }
 
 #[pymethods]
 impl PyBlockState {
     pub fn id(&self) -> String {
-        self.owning.name.clone()
+        self.owning.name()
     }
 
     pub fn name(&self) -> String {
-        self.owning.name.clone()
+        self.owning.name()
     }
 
     pub fn properties(&self) -> Vec<(String, String)> {
-        self.owning.properties.iter()
+        self.owning.properties().iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect()
     }
 
     pub fn __str__(&self) -> String {
-        let props = self.owning.properties.iter()
+        let props = self.owning.properties().iter()
             .map(|(k, v)| format!("{}={}", k, v))
             .collect::<Vec<_>>()
             .join(", ");
-        format!("{}[{}]", self.owning.name, props)
+        format!("{}[{}]", self.owning.name(), props)
     }
 }
 
-impl From<Arc<BlockState>> for PyBlockState {
-    fn from(state: Arc<BlockState>) -> Self {
+impl From<Rc<BlockState>> for PyBlockState {
+    fn from(state: Rc<BlockState>) -> Self {
         PyBlockState {
             owning: state,
         }
@@ -110,7 +109,7 @@ impl PyBlockPosition {
 impl From<BlockPosition> for PyBlockPosition {
     fn from(pos: BlockPosition) -> Self {
         PyBlockPosition {
-            x: pos.x, y: pos.y, z: pos.z,
+            x: pos.x(), y: pos.y(), z: pos.z(),
         }
     }
 }

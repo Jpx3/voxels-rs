@@ -16,7 +16,7 @@ pub trait SchematicInputStream {
             Ok(None)
         }
     }
-    
+
     fn transfer_into(&mut self, mut store: Box<dyn SchematicOutputStream>) -> Result<(), String> {
         loop {
             let mut blocks = Vec::new();
@@ -75,7 +75,7 @@ pub trait SchematicOutputStream {
     /// Writes all blocks from the given BlockStore to the output stream.
     /// This method handles buffering internally for efficiency.
     fn write_all(&mut self, blocks: &mut dyn BlockStore) -> Result<(), String> {
-        let iter = blocks.iterate_blocks(AxisOrder::XYZ);
+        let iter = blocks.block_iterator(AxisOrder::XYZ);
         let chunk_size = 4096;
         let mut buffer = Vec::with_capacity(chunk_size);
         for (pos, block_state) in iter {

@@ -3,19 +3,19 @@ use crate::stream::stream::SchematicInputStream;
 use std::cmp::min;
 use std::collections::HashMap;
 use std::io::Read;
-use std::sync::Arc;
+use std::rc::Rc;
 
 const MAGIC_NUMBER: i64 = 0x56584C44524D;
 const VERSION: i32 = 1;
 
 pub struct VXLSchematicInputStream<R: Read> {
     reader: R,
-    palette: HashMap<i32, Arc<BlockState>>,
+    palette: HashMap<i32, Rc<BlockState>>,
     header_read: bool,
     axis_order: Option<AxisOrder>,
     boundary: Option<Boundary>,
     read_blocks : usize,
-    current_run_state: Option<Arc<BlockState>>,
+    current_run_state: Option<Rc<BlockState>>,
     remaining_run_length: i32,
 }
 
@@ -49,7 +49,7 @@ impl<R: Read> SchematicInputStream for VXLSchematicInputStream<R> {
                     if !state.is_air() {
                         buffer.push(Block {
                             position: pos,
-                            state: Arc::clone(state),
+                            state: Rc::clone(state),
                         });
                         blocks_written += 1;
                     }
@@ -124,21 +124,17 @@ impl<R: Read> VXLSchematicInputStream<R> {
                         .map_err(|e| format!("VXL: Parse error: {}", e))?;
                     let id = (self.palette.len() as i32 + 1) * 2;
                     // println!("VXL Command: AddPaletteEntry ID={} State={}", id, state);
-                    self.palette.insert(id, Arc::new(state));
+                    self.palette.insert(id, Rc::new(state));
                 }
                 1 => {
                     let ref_id = self.read_var_int()?;
                     let diff_str = self.read_string()?;
                     let base = self.palette.get(&ref_id)
                         .ok_or_else(|| format!("VXL: Missing Ref ID {}", ref_id))?;
-                    let state = base.update(&diff_str)
+                    let state = base.update(diff_str)
                         .map_err(|e| format!("VXL: Diff error: {}", e))?;
                     let id = (self.palette.len() as i32 + 1) * 2;
-                    // println!(
-                    //     "VXL Command: AddPaletteDiff NewID={} RefID={} Diff={} OldState={} NewState={}",
-                    //     id, ref_id, diff_str, base, state
-                    // );
-                    self.palette.insert(id, Arc::new(state));
+                    self.palette.insert(id, Rc::new(state));
                 }
                 cmd => {
                     let is_rle = (cmd & 1) != 0;
@@ -147,7 +143,6 @@ impl<R: Read> VXLSchematicInputStream<R> {
                     let state = self.palette.get(&id)
                         .cloned()
                         .ok_or_else(|| format!("VXL: Unknown Palette ID {}", id))?;
-                    // println!("VXL Command: Draw ID={} State={} Length={} HasRLE={}", id, state, length, is_rle);
                     self.current_run_state = Some(state);
                     self.remaining_run_length = length;
                     return Ok(true);
@@ -217,21 +212,13 @@ impl<R: Read> VXLSchematicInputStream<R> {
     }
 }
 
-pub fn probe_vxl_uncompressed<R: Read>(block: &[u8]) -> bool {
-    if block.len() < 6 {
-        return false;
-    }
-    let magic = ((block[0] as i64) << 40) | ((block[1] as i64) << 32) | ((block[2] as i64) << 24) | ((block[3] as i64) << 16) | ((block[4] as i64) << 8) | (block[5] as i64);
-    magic == MAGIC_NUMBER
-}
-
 #[cfg(test)]
 mod tests {
-    use std::io::Cursor;
-    use std::sync::Arc;
+    use super::VXLSchematicInputStream;
     use crate::common::{AxisOrder, Block, BlockState, Boundary, Region};
     use crate::stream::stream::SchematicInputStream;
-    use super::VXLSchematicInputStream;
+    use std::io::Cursor;
+    use std::rc::Rc;
 
     #[test]
     fn test_vlx_reader() {
@@ -239,8 +226,8 @@ mod tests {
         let cursor = Cursor::new(vxl_data);
         let mut reader = VXLSchematicInputStream::new(cursor);
 
-        let air_state = BlockState::air_arc();
-        let stone_state = Arc::new(BlockState::from_str("minecraft:stone").unwrap());
+        let air_state = BlockState::air_rc();
+        let stone_state = Rc::new(BlockState::from_str("minecraft:stone").unwrap());
 
         let blocks_states = vec![
             air_state.clone(),
@@ -254,7 +241,7 @@ mod tests {
         let boundary = Boundary::new_from_size(2, 1, 3);
         let expected_blocks: Vec<Block> = boundary.iter(AxisOrder::XYZ)
             .zip(blocks_states.iter())
-            .map(|(pos, state)| Block { position: pos, state: Arc::clone(state) })
+            .map(|(pos, state)| Block { position: pos, state: Rc::clone(state) })
             .collect();
 
         let expected_blocks: Vec<Block> = expected_blocks.into_iter()

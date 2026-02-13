@@ -2,6 +2,7 @@ use crate::common::{AxisOrder, Block, BlockState, Boundary};
 use crate::stream::stream::SchematicOutputStream;
 use std::collections::HashMap;
 use std::io::Write;
+use std::rc::Rc;
 use std::sync::Arc;
 
 const MAGIC_NUMBER: i64 = 0x56584C44524D; // "VXLDRM"
@@ -9,7 +10,7 @@ const VERSION: i32 = 1;
 
 pub struct VXLSchematicOutputStream<W: Write> {
     writer: W,
-    running_palette: HashMap<Arc<BlockState>, i32>,
+    running_palette: HashMap<Rc<BlockState>, i32>,
     header_written: bool,
     closed: bool,
     axis_order: AxisOrder,
@@ -57,7 +58,7 @@ impl<W: Write> VXLSchematicOutputStream<W> {
         Ok(())
     }
 
-    fn find_closest_state(&self, new_state: &BlockState) -> Option<Arc<BlockState>> {
+    fn find_closest_state(&self, new_state: &BlockState) -> Option<Rc<BlockState>> {
         self.running_palette.keys()
             .min_by_key(|state| state.difference(new_state).len())
             .cloned()
@@ -86,7 +87,7 @@ impl<W: Write> VXLSchematicOutputStream<W> {
             }
             if flat_index > self.written_blocks {
                 let gap = flat_index - self.written_blocks;
-                let air = BlockState::air_arc();
+                let air = BlockState::air_rc();
                 self.write_palette_id_with_rle(&air, gap as i32)?;
                 self.written_blocks += gap;
             }
@@ -116,7 +117,7 @@ impl<W: Write> VXLSchematicOutputStream<W> {
 
     fn write_palette_id_with_rle(
         &mut self,
-        state: &Arc<BlockState>,
+        state: &Rc<BlockState>,
         run_length: i32,
     ) -> Result<(), String> {
         let palette_id = self.palette_id_from_state(state)?;
@@ -129,7 +130,7 @@ impl<W: Write> VXLSchematicOutputStream<W> {
         Ok(())
     }
 
-    fn palette_id_from_state(&mut self, state: &Arc<BlockState>) -> Result<i32, String> {
+    fn palette_id_from_state(&mut self, state: &Rc<BlockState>) -> Result<i32, String> {
         if let Some(&id) = self.running_palette.get(state) {
             return Ok(id);
         }
@@ -146,7 +147,7 @@ impl<W: Write> VXLSchematicOutputStream<W> {
             self.write_var_int(closest_id);
             self.write_string(&diff_str)?;
         }
-        self.running_palette.insert(Arc::clone(state), new_id);
+        self.running_palette.insert(Rc::clone(state), new_id);
         Ok(new_id)
     }
 }
@@ -217,12 +218,13 @@ mod test {
     use crate::common::{AxisOrder, Block, BlockState, Boundary, Region};
     use crate::stream::stream::SchematicOutputStream;
     use std::io::{Cursor, Read};
+    use std::rc::Rc;
     use std::sync::Arc;
 
     #[test]
     fn test_vxl_writer() {
-        let air_state = BlockState::air_arc();
-        let stone_state = Arc::new(BlockState::from_str("minecraft:stone").unwrap());
+        let air_state = BlockState::air_rc();
+        let stone_state = Rc::new(BlockState::from_str("minecraft:stone").unwrap());
 
         let blocks_states = vec![
             None,

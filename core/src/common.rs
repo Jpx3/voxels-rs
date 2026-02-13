@@ -1,10 +1,11 @@
-use std::cmp::Ordering;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
+use std::ops::Sub;
+use std::rc::Rc;
 use std::string::ToString;
-use std::sync::{Arc, OnceLock};
+use std::sync::OnceLock;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum Axis {
@@ -39,18 +40,9 @@ pub struct Boundary {
 
 #[derive(Clone, Eq)]
 pub struct BlockState {
-    pub name: String,
-    pub properties: Vec<(String, String)>,
+    name: String,
+    properties: Vec<(String, String)>,
     cached_hash: u64,
-}
-
-impl Debug for BlockState {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("BlockState")
-            .field("name", &self.name)
-            .field("properties", &self.properties)
-            .finish()
-    }
 }
 
 impl Hash for BlockState {
@@ -64,6 +56,22 @@ impl PartialEq for BlockState {
         self.cached_hash == other.cached_hash
             && self.name == other.name
             && self.properties == other.properties
+    }
+}
+
+impl Debug for BlockState {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if self.properties.is_empty() {
+            write!(f, "{}", self.name)
+        } else {
+            let mut props: Vec<String> = self
+                .properties
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, v))
+                .collect();
+            props.sort();
+            write!(f, "{}[{}]", self.name, props.join(","))
+        }
     }
 }
 
@@ -86,12 +94,16 @@ impl Display for BlockState {
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Block {
     pub position: BlockPosition,
-    pub state: Arc<BlockState>,
+    pub state: Rc<BlockState>,
 }
 
 impl Display for Block {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Block(state: {}, position: {})", self.state, self.position)
+        write!(
+            f,
+            "Block(state: {}, position: {})",
+            self.state, self.position
+        )
     }
 }
 
@@ -126,7 +138,7 @@ impl AxisOrder {
             AxisOrder::ZYX => [Axis::Z, Axis::Y, Axis::X],
         }
     }
-    
+
     pub fn preferred() -> Self {
         AxisOrder::XYZ
     }
@@ -152,19 +164,39 @@ impl AxisOrder {
 
 impl Boundary {
     pub fn new(min_x: i32, min_y: i32, min_z: i32, d_x: i32, d_y: i32, d_z: i32) -> Self {
-        Boundary { min_x, min_y, min_z, d_x, d_y, d_z, }
+        Boundary {
+            min_x,
+            min_y,
+            min_z,
+            d_x,
+            d_y,
+            d_z,
+        }
     }
 
     pub fn new_empty() -> Self {
         Boundary {
-            min_x: 0, min_y: 0, min_z: 0,
-            d_x: 0, d_y: 0, d_z: 0,
+            min_x: 0,
+            min_y: 0,
+            min_z: 0,
+            d_x: 0,
+            d_y: 0,
+            d_z: 0,
         }
     }
 
-    pub fn new_from_min_max(min_x: i32, min_y: i32, min_z: i32, max_x: i32, max_y: i32, max_z: i32) -> Self {
+    pub fn new_from_min_max(
+        min_x: i32,
+        min_y: i32,
+        min_z: i32,
+        max_x: i32,
+        max_y: i32,
+        max_z: i32,
+    ) -> Self {
         Boundary {
-            min_x, min_y, min_z,
+            min_x,
+            min_y,
+            min_z,
             d_x: max_x - min_x + 1,
             d_y: max_y - min_y + 1,
             d_z: max_z - min_z + 1,
@@ -193,7 +225,7 @@ impl Boundary {
         }
     }
 
-    pub(crate) fn volume(&self) -> usize {
+    pub fn volume(&self) -> usize {
         (self.d_x * self.d_y * self.d_z) as usize
     }
 
@@ -261,14 +293,6 @@ impl Boundary {
         vec![self.d_x, self.d_y, self.d_z]
     }
 
-    fn select_size(&self, axis: &Axis) -> i32 {
-        match axis {
-            Axis::X => self.d_x,
-            Axis::Y => self.d_y,
-            Axis::Z => self.d_z,
-        }
-    }
-
     pub fn contains(&self, pos: &BlockPosition) -> bool {
         pos.x >= self.min_x
             && pos.x < self.min_x + self.d_x
@@ -289,17 +313,16 @@ impl Boundary {
         let new_max_y = self.max_y().max(pos.y);
         let new_max_z = self.max_z().max(pos.z);
         Boundary::new_from_min_max(
-            new_min_x, new_min_y, new_min_z,
-            new_max_x, new_max_y, new_max_z,
+            new_min_x, new_min_y, new_min_z, new_max_x, new_max_y, new_max_z,
         )
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct BlockPosition {
-    pub x: i32,
-    pub y: i32,
-    pub z: i32,
+    x: i32,
+    y: i32,
+    z: i32,
 }
 
 impl BlockPosition {
@@ -316,14 +339,6 @@ impl BlockPosition {
             Axis::X => self.x,
             Axis::Y => self.y,
             Axis::Z => self.z,
-        }
-    }
-
-    fn select_mut(&mut self, axis: &Axis) -> &mut i32 {
-        match axis {
-            Axis::X => &mut self.x,
-            Axis::Y => &mut self.y,
-            Axis::Z => &mut self.z,
         }
     }
 
@@ -348,11 +363,23 @@ impl BlockPosition {
     }
 
     fn max(a: &BlockPosition, b: &BlockPosition) -> BlockPosition {
-        BlockPosition {
-            x: a.x.max(b.x),
-            y: a.y.max(b.y),
-            z: a.z.max(b.z),
-        }
+        BlockPosition::new(
+            a.x().max(b.x()),
+            a.y().max(b.y()),
+            a.z().max(b.z()),
+        )
+    }
+
+    pub fn x(&self) -> i32 {
+        self.x
+    }
+
+    pub fn y(&self) -> i32 {
+        self.y
+    }
+
+    pub fn z(&self) -> i32 {
+        self.z
     }
 
     fn to_json(&self) -> String {
@@ -364,9 +391,6 @@ impl BlockPosition {
     }
 }
 
-
-static AIR: OnceLock<Arc<BlockState>> = OnceLock::new();
-
 impl BlockState {
     pub fn new(name: String, properties: Vec<(String, String)>) -> Self {
         let hash = BlockState::hash(&name, &properties);
@@ -375,6 +399,29 @@ impl BlockState {
             properties,
             cached_hash: hash,
         }
+    }
+
+    pub fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    pub fn name_ref(&self) -> &String {
+        &self.name
+    }
+
+    pub fn properties(&self) -> &Vec<(String, String)> {
+        &self.properties
+    }
+
+    pub fn properties_map(&self) -> Option<HashMap<String, String>> {
+        if self.properties.is_empty() {
+            return None;
+        }
+        let mut map = HashMap::new();
+        for (k, v) in &self.properties {
+            map.insert(k.clone(), v.clone());
+        }
+        Some(map)
     }
 
     fn hash(name: &String, properties: &Vec<(String, String)>) -> u64 {
@@ -397,18 +444,29 @@ impl BlockState {
 
     pub fn from_name_and_properties(name: &String, properties: &HashMap<String, String>) -> Self {
         let name = name.clone();
-        let props_vec: Vec<(String, String)> = properties.into_iter()
+        let props_vec: Vec<(String, String)> = properties
+            .into_iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
         BlockState::new(name, props_vec)
     }
 
-    pub fn air_state_ref<'a>() -> &'a BlockState {
-        AIR.get_or_init(|| Arc::new(BlockState::air())).as_ref()
+    pub fn air_state_ref() -> &'static BlockState {
+        static AIR: OnceLock<&'static BlockState> = OnceLock::new();
+
+        *AIR.get_or_init(|| {
+            let state = BlockState::air();
+            Box::leak(Box::new(state))
+        })
     }
 
-    pub fn air_arc() -> Arc<BlockState> {
-        AIR.get_or_init(|| Arc::new(BlockState::air())).clone()
+    thread_local! {
+      // Each thread initializes this once on its first access
+      static AIR_RC: Rc<BlockState> = Rc::new(BlockState::air());
+    }
+
+    pub fn air_rc() -> Rc<BlockState> {
+        Self::AIR_RC.with(|rc| rc.clone())
     }
 
     pub fn air() -> Self {
@@ -438,7 +496,7 @@ impl BlockState {
 
     // difference string format: "new_type+prop1=val1,prop2=val2-prop3,prop4"
     // new_type is optional, if not present, type is not changed. + indicates properties to add or update, - indicates properties to remove.
-    pub fn update(&self, difference: &String) -> Result<BlockState, String> {
+    pub fn update(&self, difference: String) -> Result<BlockState, String> {
         if difference.trim().is_empty() {
             return Ok(self.clone());
         }
@@ -449,10 +507,11 @@ impl BlockState {
             ));
         }
         let mut new_name = self.name.clone();
-        let difference: String = difference.chars()
-            .filter(|c| !c.is_whitespace())
-            .collect();
-        if !difference.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '+' | '-' | '=' | ':' | ',')) {
+        let difference: String = difference.chars().filter(|c| !c.is_whitespace()).collect();
+        if !difference
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '+' | '-' | '=' | ':' | ','))
+        {
             return Err(format!(
                 "Malformed difference string: illegal character in '{}'",
                 difference
@@ -461,7 +520,23 @@ impl BlockState {
         let first_sign = difference.find(['+', '-']).unwrap_or(difference.len());
         let name_part = &difference[..first_sign];
         if !name_part.is_empty() {
-            new_name = name_part.to_string();
+            if name_part.matches(':').count() > 1 {
+                return Err(format!(
+                    "Malformed difference string: '{}' must contain at most one ':' separating namespace and type",
+                    name_part
+                ));
+            }
+            // ":abc" is valid and means "<oldnamespace>:abc"
+            if name_part.starts_with(':') {
+                new_name = format!("{}{}", self.name.split(':').next().unwrap_or(""), name_part);
+            } else {
+                new_name = name_part.to_string();
+            }
+
+            // "minecraft:" is valid and means "minecraft:<oldtype>"
+            if new_name.ends_with(':') {
+                new_name = format!("{}{}", new_name, self.name.split(':').last().unwrap_or(""));
+            }
         }
         if new_name.len() > 64 {
             return Err("Malformed difference string: new type name too long".to_string());
@@ -471,14 +546,18 @@ impl BlockState {
         let mut remaining = &difference[first_sign..];
         while !remaining.is_empty() {
             let sign = &remaining[0..1];
-            let next_sign = remaining[1..].find(['+', '-']).map(|i| i + 1).unwrap_or(remaining.len());
+            let next_sign = remaining[1..]
+                .find(['+', '-'])
+                .map(|i| i + 1)
+                .unwrap_or(remaining.len());
             let segment = &remaining[1..next_sign];
             if sign == "+" {
                 for pair in segment.split(',') {
                     if let Some((k, v)) = pair.split_once('=') {
                         to_add.push((k.to_string(), v.to_string()));
                         if to_add.len() > 256 {
-                            return Err("Malformed difference string: too many properties to add".to_string());
+                            return Err("Malformed difference string: too many properties to add"
+                                .to_string());
                         }
                     }
                 }
@@ -486,17 +565,17 @@ impl BlockState {
                 for prop in segment.split(',') {
                     to_remove.push(prop.to_string());
                     if to_remove.len() > 256 {
-                        return Err("Malformed difference string: too many properties to remove".to_string());
+                        return Err("Malformed difference string: too many properties to remove"
+                            .to_string());
                     }
                 }
             }
             remaining = &remaining[next_sign..];
         }
-        let mut new_properties: Vec<(String, String)> = self.properties
+        let mut new_properties: Vec<(String, String)> = self
+            .properties
             .iter()
-            .filter(|(k, _)| {
-                !to_remove.contains(k) && !to_add.iter().any(|(add_k, _)| add_k == k)
-            })
+            .filter(|(k, _)| !to_remove.contains(k) && !to_add.iter().any(|(add_k, _)| add_k == k))
             .cloned()
             .collect();
 
@@ -507,7 +586,36 @@ impl BlockState {
     pub fn difference(&self, other: &BlockState) -> String {
         let mut sb = String::with_capacity(64);
         if self.name != other.name {
-            sb.push_str(&other.name);
+            let other_namespace = if let Some(idx) = other.name.find(':') {
+                &other.name[..idx]
+            } else {
+                ""
+            };
+            let other_type = if let Some(idx) = other.name.find(':') {
+                &other.name[idx + 1..]
+            } else {
+                &other.name
+            };
+            let self_namespace = if let Some(idx) = self.name.find(':') {
+                &self.name[..idx]
+            } else {
+                ""
+            };
+            let self_type = if let Some(idx) = self.name.find(':') {
+                &self.name[idx + 1..]
+            } else {
+                &self.name
+            };
+
+            if other_namespace != self_namespace {
+                sb.push_str(other_namespace);
+            }
+            if (other_namespace != self_namespace) || (other_type != self_type) {
+                sb.push(':');
+            }
+            if other_type != self_type {
+                sb.push_str(other_type);
+            }
         }
         let mut first_update = true;
         for (k, v) in &other.properties {
@@ -540,21 +648,6 @@ impl BlockState {
         sb
     }
 
-    pub fn name(&self) -> String {
-        self.name.clone()
-    }
-
-    pub fn properties(&self) -> Option<HashMap<String, String>> {
-        if self.properties.is_empty() {
-            return None;
-        }
-        let mut map = HashMap::new();
-        for (k, v) in &self.properties {
-            map.insert(k.clone(), v.clone());
-        }
-        Some(map)
-    }
-
     pub fn clone(&self) -> Self {
         BlockState::new(self.name.clone(), self.properties.clone())
     }
@@ -581,21 +674,42 @@ impl BlockState {
         }
 
         let split_index = input.find("[").unwrap();
-        let type_name = &input[0..split_index];
-        let raw_type_name = if let Some(stripped) = type_name.strip_prefix("minecraft:") {
-            stripped.trim()
-        } else {
+        let resource_location = &input[0..split_index];
+
+        if !resource_location
+            .chars()
+            .all(|c| matches!(c, 'a'..='z' | '0'..='9' | '_' | '/' | ':'))
+        {
             return Err(format!(
-                "Malformed BlockState string: '{}' must start with 'minecraft:'",
-                type_name
-            ));
-        };
-        if !raw_type_name.chars().all(|c| matches!(c, 'a'..='z' | '0'..='9' | '_' | '/' | ':')) {
-            return Err(format!(
-                "Malformed BlockState string: illegal character in path '{}'",
-                raw_type_name
+                "Malformed BlockState string: illegal character in '{}'",
+                resource_location
             ));
         }
+
+        let namespace = resource_location.split(':').next().unwrap_or("").trim();
+        let type_name = resource_location.split(':').last().unwrap_or("").trim();
+
+        if namespace.is_empty() {
+            return Err(format!(
+                "Malformed BlockState string: missing namespace in '{}'",
+                resource_location
+            ));
+        }
+
+        if namespace != "minecraft" {
+            return Err(format!(
+                "Malformed BlockState string: unsupported namespace '{}', only 'minecraft' is allowed",
+                namespace
+            ));
+        }
+
+        if type_name.is_empty() {
+            return Err(format!(
+                "Malformed BlockState string: missing type name in '{}'",
+                resource_location
+            ));
+        }
+
         let type_properties_string = &input[split_index + 1..];
         let property_map = if type_properties_string == "]" {
             vec![]
@@ -617,59 +731,51 @@ impl BlockState {
             if k.is_empty() || v.is_empty() {
                 return Err("Malformed BlockState string: empty property key or value".to_string());
             }
-            if !k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '+' || c == '-') {
-                return Err(format!("Malformed BlockState string: illegal character in property key '{}'", k));
+            if !k
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '+' || c == '-')
+            {
+                return Err(format!(
+                    "Malformed BlockState string: illegal character in property key '{}'",
+                    k
+                ));
             }
-            if !v.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '+' || c == '-') {
-                return Err(format!("Malformed BlockState string: illegal character in property value '{}'", v));
+            if !v
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '+' || c == '-')
+            {
+                return Err(format!(
+                    "Malformed BlockState string: illegal character in property value '{}'",
+                    v
+                ));
             }
         }
-        Ok(BlockState::new(type_name.trim().to_string(), property_map))
+        Ok(BlockState::new(
+            resource_location.trim().to_string(),
+            property_map,
+        ))
     }
+}
 
-    pub fn to_json(&self) -> String {
-        let props: Vec<String> = self
-            .properties
-            .iter()
-            .map(|(k, v)| format!(r#""{}": "{}""#, k, v))
-            .collect();
-        format!(
-            r#"{{"name": "{}", "properties": {{{}}}}}"#,
-            self.name,
-            props.join(", ")
-        )
+impl Sub for BlockState {
+    type Output = String;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        self.difference(&rhs)
     }
 }
 
 impl Block {
-    pub fn new(state: Arc<BlockState>, position: BlockPosition) -> Self {
+    pub fn new(state: Rc<BlockState>, position: BlockPosition) -> Self {
+        Block { state, position }
+    }
+
+    pub fn new_at_zero(state: Rc<BlockState>) -> Self {
         Block {
             state,
-            position
+            position: BlockPosition::zero(),
         }
     }
-
-    pub fn new_at_zero(state: Arc<BlockState>) -> Self {
-        Block {
-            state, position: BlockPosition::zero(),
-        }
-    }
-
-    fn to_json(&self) -> String {
-        format!(
-            r#"{{"state": {}, "position": {}}}"#,
-            self.state.to_json(),
-            self.position.to_json()
-        )
-    }
-
-    // fn to_string(&self) -> String {
-    //     format!(
-    //         "Block(state: {}, position: {})",
-    //         self.state.to_string(),
-    //         self.position.to_string()
-    //     )
-    // }
 }
 
 impl Region for Boundary {
@@ -694,7 +800,6 @@ struct BoundaryIterator<'a> {
     done: bool,
 }
 
-
 impl Iterator for BoundaryIterator<'_> {
     type Item = BlockPosition;
 
@@ -711,7 +816,8 @@ impl Iterator for BoundaryIterator<'_> {
             self.current.select_set(&innermost_axis, next_val);
             return Some(result);
         }
-        self.current.select_set(&innermost_axis, self.boundary.select_min(&innermost_axis));
+        self.current
+            .select_set(&innermost_axis, self.boundary.select_min(&innermost_axis));
         let last_axis = axis_vectors.first().unwrap();
         for axis in axis_vectors.iter().rev().skip(1) {
             let next = self.current.select(axis) + 1;
@@ -722,13 +828,13 @@ impl Iterator for BoundaryIterator<'_> {
                     self.done = true;
                     break;
                 }
-                self.current.select_set(axis, self.boundary.select_min(axis));
+                self.current
+                    .select_set(axis, self.boundary.select_min(axis));
             } else {
                 self.current.select_set(axis, next);
                 break;
             }
         }
-
         Some(result)
     }
 
@@ -801,33 +907,82 @@ mod tests {
 
     #[test]
     fn test_block_difference() {
-        let state1 = super::BlockState::from_string("minecraft:stone[variant=granite,hardness=1]".to_string()).unwrap();
-        let state2 = super::BlockState::from_string("minecraft:stone[variant=diorite,hardness=1]".to_string()).unwrap();
-        let difference = state1.difference(&state2);
+        let state1 = super::BlockState::from_string(
+            "minecraft:stone[variant=granite,hardness=1]".to_string(),
+        )
+        .unwrap();
+        let state2 = super::BlockState::from_string(
+            "minecraft:stone[variant=diorite,hardness=1]".to_string(),
+        )
+        .unwrap();
+        let difference = state1 - state2;
         assert_eq!(difference, "+variant=diorite");
     }
 
     #[test]
     fn test_block_update() {
-        let state1 = super::BlockState::from_string("minecraft:stone[variant=granite,hardness=1]".to_string()).unwrap();
-        let updated_state = state1.update(&"minecraft:cobblestone  + variant = diorite+richy=nice-  hardness".to_string()).unwrap();
+        let state1 = super::BlockState::from_str(
+            "minecraft:stone[variant=granite,hardness=1]",
+        )
+        .unwrap();
+        let updated_state = state1
+            .update("minecraft:cobblestone  + variant = diorite+richy=nice-  hardness".to_string())
+            .unwrap();
         assert_eq!(updated_state.name, "minecraft:cobblestone");
         assert_eq!(updated_state.properties.len(), 2);
-        assert_eq!(updated_state.properties[0], ("variant".to_string(), "diorite".to_string()));
-        assert_eq!(updated_state.properties[1], ("richy".to_string(), "nice".to_string()));
-        let other_updated_state = state1.update(&"-variant+fish=false,muffin=true".to_string()).unwrap();
+        assert_eq!(
+            updated_state.properties[0],
+            ("variant".to_string(), "diorite".to_string())
+        );
+        assert_eq!(
+            updated_state.properties[1],
+            ("richy".to_string(), "nice".to_string())
+        );
+        let other_updated_state = state1
+            .update("-variant+fish=false,muffin=true".to_string())
+            .unwrap();
         assert_eq!(other_updated_state.name, "minecraft:stone");
         assert_eq!(other_updated_state.properties.len(), 3);
-        assert!(other_updated_state.properties.contains(&("hardness".to_string(), "1".to_string())));
-        assert!(other_updated_state.properties.contains(&("fish".to_string(), "false".to_string())));
-        assert!(other_updated_state.properties.contains(&("muffin".to_string(), "true".to_string())));
+        assert!(other_updated_state
+            .properties
+            .contains(&("hardness".to_string(), "1".to_string())));
+        assert!(other_updated_state
+            .properties
+            .contains(&("fish".to_string(), "false".to_string())));
+        assert!(other_updated_state
+            .properties
+            .contains(&("muffin".to_string(), "true".to_string())));
     }
 
     #[test]
     fn test_illegal_block_state_parsing() {
         let state_str = "minecraft:stone variant=granite]";
-        let result = super::BlockState::from_string(state_str.to_string());
+        let result = super::BlockState::from_str(state_str);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_namespace_difference_parsing() {
+        let state1 = super::BlockState::from_str(
+            "minecraft:stone[variant=granite,hardness=1]",
+        )
+        .unwrap();
+        let updated_state = state1
+            .update(":cobblestone  + variant = diorite".to_string())
+            .unwrap();
+        assert_eq!(updated_state.name, "minecraft:cobblestone");
+
+        // test legacy namespace handling
+        let updated_state2 = state1
+            .update("minecraft:cobblestone  + variant = diorite".to_string())
+            .unwrap();
+        assert_eq!(updated_state2.name, "minecraft:cobblestone");
+
+        // just update namespace
+        let updated_state3 = state1
+            .update("minecraft:  + variant = diorite".to_string())
+            .unwrap();
+        assert_eq!(updated_state3.name, "minecraft:stone");
     }
 
     #[test]
@@ -852,8 +1007,10 @@ mod tests {
         let expected_positions = vec![
             // (0, 0, 0), (0, 0, 1),
             // (0, 1, 0), (0, 1, 1),
-            (1, 0, 0), (1, 0, 1),
-            (1, 1, 0), (1, 1, 1),
+            (1, 0, 0),
+            (1, 0, 1),
+            (1, 1, 0),
+            (1, 1, 1),
         ];
         assert_eq!(positions, expected_positions);
     }

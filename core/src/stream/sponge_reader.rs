@@ -1,11 +1,11 @@
-use crate::common::{AxisOrder, Block, BlockState, Boundary, Region};
+use crate::common::{AxisOrder, Block, BlockPosition, BlockState, Boundary, Region};
 use crate::store::blockstore::LazyPaletteBlockStoreWrapper;
+use crate::stream::stream::SchematicInputStream;
 use fastnbt::Value;
 use std::collections::HashMap;
 use std::io::Read;
 use std::ops::Deref;
-use std::sync::Arc;
-use crate::stream::stream::SchematicInputStream;
+use std::rc::Rc;
 
 pub struct SpongeSchematicInputStream<R: Read> {
     reader: R,
@@ -38,7 +38,7 @@ impl<R: Read> SchematicInputStream for SpongeSchematicInputStream<R> {
                     if !block_state.is_air() {
                         let block = Block {
                             position: pos,
-                            state: Arc::clone(&block_state),
+                            state: Rc::clone(&block_state),
                         };
                         buffer.push(block);
                         blocks_written += 1;
@@ -132,14 +132,14 @@ impl<R: Read> SpongeSchematicInputStream<R> {
             Value::Compound(map) => map,
             _ => return Err("Sponge: 'Palette' tag is not a Compound".into()),
         };
-        let mut palette: HashMap<isize, Arc<BlockState>> = HashMap::new();
+        let mut palette: HashMap<isize, Rc<BlockState>> = HashMap::new();
         for x in palette_compound {
             let name = x.0;
             let state = match &x.1 {
                 Value::Int(v) => *v,
                 _ => return Err("Sponge: Palette entry value is not an Int".into()),
             };
-            let block_state = Arc::new(BlockState::from_string(name.clone())?);
+            let block_state = Rc::new(BlockState::from_string(name.clone())?);
             palette.insert(state as isize, block_state);
         }
         blocks.set_actual_palette(palette);
@@ -173,8 +173,12 @@ impl<R: Read> SpongeSchematicInputStream<R> {
                 let mut block_iter = boundary.iter(AxisOrder::YZX);
                 let blocks = self.blocks.as_mut().unwrap();
                 let air_state_index: i32 = blocks.state_to_temp_id(
-                    &BlockState::air_arc()
+                    &BlockState::air_rc()
                 ).map(|t| t as i32).unwrap_or(-1);
+
+                let mut block_positions: [BlockPosition; 4096] = [BlockPosition::new(0, 0, 0); 4096];
+                let mut state_indices: [isize; 4096] = [0; 4096];
+                let mut pos_index = 0;
 
                 for (_, state_index) in block_states.iter().enumerate() {
                     if *state_index < 0 {
@@ -184,9 +188,21 @@ impl<R: Read> SpongeSchematicInputStream<R> {
                     if *state_index == air_state_index {
                         continue;
                     }
+                    block_positions[pos_index] = pos;
+                    state_indices[pos_index] = *state_index as isize;
+                    pos_index += 1;
+
+                    if pos_index >= 4096 {
+                        blocks.set_unknown_blocks(
+                            &block_positions, &state_indices
+                        ).map_err(|e| format!("Sponge: Failed to copy block batch at pos {:?}: {}", pos, e))?;
+                        pos_index = 0;
+                    }
+                }
+                for i in 0..pos_index {
                     blocks.set_unknown_block(
-                        &pos, *state_index as isize
-                    ).map_err(|e| format!("Sponge: Failed to copy block at pos {:?}: {}", pos, e))?;
+                        &block_positions[i], state_indices[i]
+                    ).map_err(|e| format!("Sponge: Failed to copy final block batch at pos {:?}: {}", block_positions[i], e))?;
                 }
                 Ok(())
             },
@@ -226,11 +242,11 @@ impl<R: Read> SpongeSchematicInputStream<R> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-    use flate2::read::GzDecoder;
     use crate::common::{Block, BlockPosition, BlockState};
     use crate::stream::sponge_reader::SpongeSchematicInputStream;
     use crate::stream::stream::SchematicInputStream;
+    use flate2::read::GzDecoder;
+    use std::rc::Rc;
 
     fn create_test_schematic() -> Vec<Block> {
         let mut blocks = Vec::new();
@@ -256,7 +272,7 @@ mod tests {
                     if !block_state.is_air() {
                         blocks.push(Block {
                             position: BlockPosition::new(x, y, z),
-                            state: Arc::new(block_state),
+                            state: Rc::new(block_state),
                         });
                     }
                 }
@@ -279,13 +295,13 @@ mod tests {
             assert!(found.is_some(), "Expected to find block at {:?} but it was missing", expected.position);
             let found_block = found.unwrap();
             assert_eq!(found_block.state.name(), expected.state.name(), "Block state name mismatch at position {:?}", expected.position);
-            assert_eq!(found_block.state.properties(), expected.state.properties(), "Block state properties mismatch at position {:?}", expected.position);
+            assert_eq!(found_block.state.properties_map(), expected.state.properties_map(), "Block state properties mismatch at position {:?}", expected.position);
         }
 
         for block in read_blocks {
             let expected = expected_blocks.iter().find(|b| b.position == block.position).unwrap();
             assert_eq!(block.state.name(), expected.state.name(), "Block state name mismatch at position {:?}", block.position);
-            assert_eq!(block.state.properties(), expected.state.properties(), "Block state properties mismatch at position {:?}", block.position);
+            assert_eq!(block.state.properties_map(), expected.state.properties_map(), "Block state properties mismatch at position {:?}", block.position);
         }
     }
 
