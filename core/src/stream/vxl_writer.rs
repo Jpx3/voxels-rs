@@ -317,7 +317,7 @@ mod test {
         let closest_id = read_var_int(&mut cursor).unwrap();
         assert_eq!(closest_id, 2); // closest id is air (2)
         let diff_str = read_string(&mut cursor).unwrap();
-        assert_eq!(diff_str, "minecraft:stone");
+        assert_eq!(diff_str, ":stone"); // diff from air is just ":stone" (no "minecraft" namespace since it's the same as closest)
         let stone_push_command = read_var_int(&mut cursor).unwrap();
         assert_eq!(stone_push_command, 5); // id 5 for stone with RLE
         let stone_push_length = read_var_int(&mut cursor).unwrap();

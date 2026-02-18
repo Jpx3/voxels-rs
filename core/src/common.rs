@@ -656,7 +656,17 @@ impl BlockState {
         BlockState::from_string(input.to_string())
     }
 
-    pub fn from_string(input: String) -> Result<BlockState, String> {
+    pub fn from_string(mut input: String) -> Result<BlockState, String> {
+        if input.len() > 4096 {
+            return Err(format!(
+                "Malformed BlockState string: length {} exceeds maximum of 4096",
+                input.len()
+            ));
+        }
+
+        // remove all whitespace for easier parsing
+        input = input.chars().filter(|c| !c.is_whitespace()).collect();
+
         if !input.contains("[") {
             if input.contains("]") {
                 return Err("Malformed BlockState string: missing '['".to_string());

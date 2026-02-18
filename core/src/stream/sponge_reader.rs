@@ -307,7 +307,7 @@ mod tests {
 
     #[test]
     fn test_sponge_v2_arbitrary_schem() {
-        const TEST_SCHEMATIC: &[u8] = include_bytes!("test_schematics/schematic2.spongev2");
+        const TEST_SCHEMATIC: &[u8] = include_bytes!("test_schematics/schematic.spongev2");
         let reader = std::io::Cursor::new(TEST_SCHEMATIC);
         let reader = GzDecoder::new(reader);
         let mut sponge_reader = SpongeSchematicInputStream::new(reader);

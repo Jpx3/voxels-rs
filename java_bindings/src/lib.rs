@@ -8,7 +8,6 @@ use robusta_jni::jni::objects::{GlobalRef, JFieldID};
 use robusta_jni::jni::JNIEnv;
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::sync::Arc;
 use voxels_core::common::{Block, BlockPosition, BlockState, Boundary};
 use voxels_core::stream::stream::{SchematicInputStream, SchematicOutputStream};
 
@@ -148,8 +147,8 @@ fn override_block_position(
 
 #[bridge]
 mod jni {
-
-use std::io::{BufReader, BufWriter};use super::*;
+    use std::io::{BufReader, BufWriter};
+    use super::*;
     use crate::jstreams::{JavaInputStream, JavaOutputStream};
     use flate2::Compression;
     use robusta_jni::convert::Field;
