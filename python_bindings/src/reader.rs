@@ -202,12 +202,12 @@ impl VoxelReader {
         }
     }
 
-    #[pyo3(signature = (path, format="vxl"))]
-    fn save(&mut self, path: String, format: &str) -> PyResult<()> {
+    #[pyo3(signature = (output, format="vxl"))]
+    fn save(&mut self, output: Bound<'_, PyAny>, format: &str) -> PyResult<()> {
         if self.reader.is_none() {
             return Err(PyErr::new::<PyRuntimeError, _>("Reader is closed"));
         }
-        let stream = BufWriter::new(GzEncoder::new(BufWriter::new(writer_from(path)?), flate2::Compression::default()));
+        let stream = BufWriter::new(GzEncoder::new(BufWriter::new(writer_from(&output)?), flate2::Compression::default()));
         let boundary = self.boundary()?.into();
 
         let output_schematic_stream: Box<dyn SchematicOutputStream> = match format.to_ascii_uppercase().as_str() {

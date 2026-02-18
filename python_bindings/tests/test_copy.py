@@ -25,6 +25,23 @@ def test_voxel_class():
     duration_ms = (end - start) * 1000
     print(f"VXL read: {duration_ms:.2f} ms")
 
+
+  with voxels_rs.open("C:/Users/strun/RustroverProjects/voxels-rs/test_data/sponge3.schem") as schematic:
+    start = time.time()
+#     all_blocks = schematic.read_full()
+    schematic.iterate_blocks(lambda block: None)
+    end = time.time()
+    duration_ms = (end - start) * 1000
+    print(f"Sponge 2 read: {duration_ms:.2f} ms")
+
+  with voxels_rs.open("C:/Users/strun/RustroverProjects/voxels-rs/test_data/sponge3-v2.vxl") as schematic:
+    start = time.time()
+#     all_blocks = schematic.read_full()
+    schematic.iterate_blocks(lambda block: None)
+    end = time.time()
+    duration_ms = (end - start) * 1000
+    print(f"VXL 2 read: {duration_ms:.2f} ms")
+
   exit(1)
 
 if __name__ == "__main__":

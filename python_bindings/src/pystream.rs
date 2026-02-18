@@ -62,10 +62,19 @@ pub fn reader_from(input: &Bound<'_, PyAny>) -> PyResult<Box<dyn Read>> {
     }
 }
 
-pub fn writer_from(input: String) -> PyResult<Box<dyn Write>> {
-    if input.starts_with("http") {
-        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>("HTTP not linked"))
+pub fn writer_from(input: &Bound<'_, PyAny>) -> PyResult<Box<dyn Write>> {
+    if let Ok(py_str) = input.cast::<PyString>() {
+        let s = py_str.to_str()?;
+        if s.starts_with("http") {
+            Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>("HTTP not linked"))
+        } else {
+            Ok(Box::new(File::create(s)?))
+        }
+    } else if input.hasattr("write")? {
+        Ok(Box::new(PyStreamAdapter { obj: input.clone().unbind() }))
     } else {
-        Ok(Box::new(File::create(input)?))
+        Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+            "Input must be a path, URL, or file-like object"
+        ))
     }
 }
