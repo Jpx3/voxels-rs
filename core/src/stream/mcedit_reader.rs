@@ -108,7 +108,6 @@ impl<R: Read> MCEditSchematicInputStream<R> {
                 }
                 let block_id = Self::read_block_id(&block_ids, idx, add_blocks.as_deref());
                 let block_data = block_data[idx] & 0x0F;
-
                 let block_cache_key = block_id << 4 | block_data as i32;
 
                 if block_id != 0 {

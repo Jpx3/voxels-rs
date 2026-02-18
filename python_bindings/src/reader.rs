@@ -1,3 +1,4 @@
+use std::fmt::format;
 use crate::pystream::{reader_from, writer_from};
 use crate::shared::{PyBlock, PyBoundary};
 use flate2::bufread::GzDecoder;
@@ -117,7 +118,7 @@ impl VoxelReader {
                 if let Some(boundary) = result.unwrap() {
                     Ok(PyBoundary::from(boundary))
                 } else {
-                    Err(PyErr::new::<PyRuntimeError, _>("Failed to read boundary"))
+                    Err(PyErr::new::<PyRuntimeError, _>("Boundary information not available"))
                 }
             }
         } else {
@@ -137,7 +138,7 @@ impl VoxelReader {
         Ok(rslf.into())
     }
 
-    fn iter_blocks<'py>(slf: Py<Self>, py: Python<'py>) -> PyResult<Py<Self>> {
+    fn pages<'py>(slf: Py<Self>, py: Python<'py>) -> PyResult<Py<Self>> {
         let mut rslf = slf.borrow_mut(py);
         if rslf.reader.is_none() {
             return Err(PyErr::new::<PyRuntimeError, _>("Reader is closed"));

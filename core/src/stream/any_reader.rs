@@ -66,6 +66,8 @@ impl SchematicInputStream for AnySchematicInputStream {
         self.options.retain_mut(|(opt, _)| opt.boundary().is_ok());
         if self.options.len() == 1 {
             self.options[0].0.boundary()
+        } else if self.options.is_empty() {
+            Err("No matching format found".to_string())
         } else {
             Ok(None)
         }

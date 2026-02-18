@@ -1,15 +1,18 @@
+use crate::common::BlockState;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
-use crate::common::BlockState;
 
 const JSON_DATA: &str = include_str!("legacy_ids.json");
 static BLOCKS: OnceLock<Arc<HashMap<String, String>>> = OnceLock::new();
 
 pub fn get_blocks() -> Arc<HashMap<String, String>> {
-    BLOCKS.get_or_init(|| {
-        let map: HashMap<String, String> = serde_json::from_str(JSON_DATA).expect("Failed to parse legacy IDs JSON");
-        Arc::new(map)
-    }).clone()
+    BLOCKS
+        .get_or_init(|| {
+            let map: HashMap<String, String> =
+                serde_json::from_str(JSON_DATA).expect("Failed to parse legacy IDs JSON");
+            Arc::new(map)
+        })
+        .clone()
 }
 
 pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<BlockState> {
@@ -26,18 +29,150 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
                 _ => return None,
             };
             let extended = data & 8 != 0;
-            Some(BlockState::new(get_legacy_type(id, 0)?, vec![
-                ("facing".to_string(), facing.to_string()),
-                ("extended".to_string(), extended.to_string()),
-            ]))
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![
+                    ("facing".to_string(), facing.to_string()),
+                    ("extended".to_string(), extended.to_string()),
+                ],
+            ))
+        }
+
+        // Fire
+        51 => {
+            let age = data & 15;
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![("age".to_string(), age.to_string())],
+            ))
+        }
+
+        // Piston Head
+        34 => {
+            let facing = match data & 7 {
+                0 => "down",
+                1 => "up",
+                2 => "north",
+                3 => "south",
+                4 => "west",
+                5 => "east",
+                _ => return None,
+            };
+            let sticky = data & 8 != 0;
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![
+                    ("facing".to_string(), facing.to_string()),
+                    ("sticky".to_string(), sticky.to_string()),
+                ],
+            ))
+        }
+
+        // Brewing Stand
+        117 => {
+            let has_bottle_0 = data & 1 != 0;
+            let has_bottle_1 = data & 2 != 0;
+            let has_bottle_2 = data & 4 != 0;
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![
+                    ("has_bottle_0".to_string(), has_bottle_0.to_string()),
+                    ("has_bottle_1".to_string(), has_bottle_1.to_string()),
+                    ("has_bottle_2".to_string(), has_bottle_2.to_string()),
+                ],
+            ))
+        }
+
+        // Anvil
+        145 => {
+            let facing = match data & 3 {
+                0 => "south",
+                1 => "west",
+                2 => "north",
+                3 => "east",
+                _ => "north",
+            };
+
+            let damage = (data & 15) >> 2;
+            let damage_type_name = match damage & 2 {
+                0 => "anvil",
+                1 => "chipped_anvil",
+                2 => "damaged_anvil",
+                _ => "anvil",
+            };
+
+            Some(BlockState::new(
+                format!("minecraft:{}", damage_type_name),
+                vec![("facing".to_string(), facing.to_string())],
+            ))
+        }
+
+        // Wheat
+        59 => {
+            let age = data & 7;
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![("age".to_string(), age.to_string())],
+            ))
+        }
+
+        // Sunflower
+        175 => {
+            let half = if data & 8 != 0 { "upper" } else { "lower" };
+            let type_name = match data & 7 {
+                0 => "sunflower",
+                1 => "lilac",
+                2 => "tall_grass",
+                3 => "large_fern",
+                4 => "rose_bush",
+                5 => "peony",
+                _ => "sunflower",
+            };
+            Some(BlockState::new(
+                format!("minecraft:{}", type_name),
+                vec![("half".to_string(), half.to_string())],
+            ))
+        }
+
+        // Hay Block
+        170 => {
+            let axis = match data & 12 {
+                0 => "y",
+                4 => "x",
+                8 => "z",
+                _ => "y",
+            };
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![("axis".to_string(), axis.to_string())],
+            ))
+        }
+
+        // Sapling
+        6 => {
+            let type_name = match data & 7 {
+                0 => "oak",
+                1 => "spruce",
+                2 => "birch",
+                3 => "jungle",
+                4 => "acacia",
+                5 => "dark_oak",
+                _ => "oak",
+            };
+            let stage = (data & 8) >> 3;
+            Some(BlockState::new(
+                format!("minecraft:{}_sapling", type_name),
+                vec![("stage".to_string(), stage.to_string())],
+            ))
         }
 
         // Water & Lava
         8 | 9 | 10 | 11 => {
             let level = data & 15;
-            Some(BlockState::new(get_legacy_type(id, 0)?, vec![
-                ("level".to_string(), level.to_string()),
-            ]))
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![("level".to_string(), level.to_string())],
+            ))
         }
 
         // Dispensers & Droppers
@@ -52,10 +187,13 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
                 _ => return None,
             };
             let triggered = data & 8 != 0;
-            Some(BlockState::new(get_legacy_type(id, 0)?, vec![
-                ("facing".to_string(), facing.to_string()),
-                ("triggered".to_string(), triggered.to_string()),
-            ]))
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![
+                    ("facing".to_string(), facing.to_string()),
+                    ("triggered".to_string(), triggered.to_string()),
+                ],
+            ))
         }
 
         // Doors (Wooden & Iron)
@@ -70,22 +208,25 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
             };
             let open = data & 4 != 0;
             let hinge = if data & 8 != 0 {
-                if data & 1 != 0 { "right" } else { "left" }
+                if data & 1 != 0 {
+                    "right"
+                } else {
+                    "left"
+                }
             } else {
                 "none"
             };
-            let powered = if data & 8 != 0 {
-                data & 2 != 0
-            } else {
-                false
-            };
-            Some(BlockState::new(get_legacy_type(id, 0)?, vec![
-                ("half".to_string(), half.to_string()),
-                ("facing".to_string(), facing.to_string()),
-                ("open".to_string(), open.to_string()),
-                ("hinge".to_string(), hinge.to_string()),
-                ("powered".to_string(), powered.to_string()),
-            ]))
+            let powered = if data & 8 != 0 { data & 2 != 0 } else { false };
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![
+                    ("half".to_string(), half.to_string()),
+                    ("facing".to_string(), facing.to_string()),
+                    ("open".to_string(), open.to_string()),
+                    ("hinge".to_string(), hinge.to_string()),
+                    ("powered".to_string(), powered.to_string()),
+                ],
+            ))
         }
 
         // Vines
@@ -94,12 +235,15 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
             let east = data & 2 != 0;
             let south = data & 4 != 0;
             let west = data & 8 != 0;
-            Some(BlockState::new(get_legacy_type(id, 0)?, vec![
-                ("north".to_string(), north.to_string()),
-                ("east".to_string(), east.to_string()),
-                ("south".to_string(), south.to_string()),
-                ("west".to_string(), west.to_string()),
-            ]))
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![
+                    ("north".to_string(), north.to_string()),
+                    ("east".to_string(), east.to_string()),
+                    ("south".to_string(), south.to_string()),
+                    ("west".to_string(), west.to_string()),
+                ],
+            ))
         }
 
         // Pumpkins & Melons
@@ -111,9 +255,10 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
                 3 => "east",
                 _ => "north",
             };
-            Some(BlockState::new(get_legacy_type(id, 0)?, vec![
-                ("facing".to_string(), facing.to_string()),
-            ]))
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![("facing".to_string(), facing.to_string())],
+            ))
         }
 
         // Double Slabs
@@ -129,8 +274,12 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
                 7 => "quartz",
                 _ => "stone",
             };
-            Some(BlockState::new(format!("minecraft:double_{}_slab", type_name), vec![]))
+            Some(BlockState::new(
+                format!("minecraft:double_{}_slab", type_name),
+                vec![],
+            ))
         }
+        
         // Slabs
         44 => {
             let half = if data & 8 != 0 { "top" } else { "bottom" };
@@ -146,9 +295,10 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
                 _ => "stone",
             };
 
-            Some(BlockState::new(format!("minecraft:{}_slab", type_name), vec![
-                ("half".to_string(), half.to_string()),
-            ]))
+            Some(BlockState::new(
+                format!("minecraft:{}_slab", type_name),
+                vec![("half".to_string(), half.to_string())],
+            ))
         }
 
         // Wooden Slab
@@ -163,17 +313,19 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
                 _ => "oak",
             };
             let half = if data & 8 != 0 { "top" } else { "bottom" };
-            Some(BlockState::new(format!("minecraft:{}_slab", type_name), vec![
-                ("half".to_string(), half.to_string()),
-            ]))
+            Some(BlockState::new(
+                format!("minecraft:{}_slab", type_name),
+                vec![("half".to_string(), half.to_string())],
+            ))
         }
 
         // Sandstone & Purpur Slabs
         182 | 205 => {
             let half = if data & 8 != 0 { "top" } else { "bottom" };
-            Some(BlockState::new(get_legacy_type(id, 0)?, vec![
-                ("half".to_string(), half.to_string()),
-            ]))
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![("half".to_string(), half.to_string())],
+            ))
         }
 
         // Buttons
@@ -187,13 +339,22 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
                 5 => "north", // technically "up"
                 _ => "north", // technically "up"
             };
-            let face = if data & 7 == 0 { "ceiling" } else if data & 7 == 5 { "floor" } else { "wall" };
+            let face = if data & 7 == 0 {
+                "ceiling"
+            } else if data & 7 == 5 {
+                "floor"
+            } else {
+                "wall"
+            };
             let powered = data & 8 != 0;
-            Some(BlockState::new(get_legacy_type(id, 0)?, vec![
-                ("facing".to_string(), facing.to_string()),
-                ("powered".to_string(), powered.to_string()),
-                ("face".to_string(), face.to_string()),
-            ]))
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![
+                    ("facing".to_string(), facing.to_string()),
+                    ("powered".to_string(), powered.to_string()),
+                    ("face".to_string(), face.to_string()),
+                ],
+            ))
         }
 
         // Levers
@@ -207,14 +368,22 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
                 5 => "up", // technically "down"
                 _ => "up", // technically "down"
             };
-            let face = if data & 7 == 0 { "floor" } else if
-                data & 7 == 5 { "ceiling" } else { "wall" };
+            let face = if data & 7 == 0 {
+                "floor"
+            } else if data & 7 == 5 {
+                "ceiling"
+            } else {
+                "wall"
+            };
             let powered = data & 8 != 0;
-            Some(BlockState::new(get_legacy_type(id, 0)?, vec![
-                ("facing".to_string(), facing.to_string()),
-                ("powered".to_string(), powered.to_string()),
-                ("face".to_string(), face.to_string()),
-            ]))
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![
+                    ("facing".to_string(), facing.to_string()),
+                    ("powered".to_string(), powered.to_string()),
+                    ("face".to_string(), face.to_string()),
+                ],
+            ))
         }
 
         // Beds
@@ -227,10 +396,13 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
                 _ => "south",
             };
             let part = if data & 8 != 0 { "head" } else { "foot" };
-            Some(BlockState::new(get_legacy_type(id, 0)?, vec![
-                ("facing".to_string(), facing.to_string()),
-                ("part".to_string(), part.to_string()),
-            ]))
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![
+                    ("facing".to_string(), facing.to_string()),
+                    ("part".to_string(), part.to_string()),
+                ],
+            ))
         }
 
         // Stairs
@@ -243,11 +415,14 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
                 _ => "north",
             };
             let half = if data & 4 != 0 { "top" } else { "bottom" };
-            Some(BlockState::new(get_legacy_type(id, 0)?, vec![
-                ("facing".to_string(), facing.to_string()),
-                ("half".to_string(), half.to_string()),
-                ("shape".to_string(), "straight".to_string()),
-            ]))
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![
+                    ("facing".to_string(), facing.to_string()),
+                    ("half".to_string(), half.to_string()),
+                    ("shape".to_string(), "straight".to_string()),
+                ],
+            ))
         }
 
         // Directional Containers (Chests, Furnaces, Ladders, Wall Signs)
@@ -259,9 +434,10 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
                 5 => "east",
                 _ => "north",
             };
-            Some(BlockState::new(get_legacy_type(id, 0)?, vec![
-                ("facing".to_string(), facing.to_string()),
-            ]))
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![("facing".to_string(), facing.to_string())],
+            ))
         }
 
         // Standing Signs
@@ -273,9 +449,10 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
                 3 => "east",
                 _ => "south",
             };
-            Some(BlockState::new(get_legacy_type(id, 0)?, vec![
-                ("facing".to_string(), facing.to_string()),
-            ]))
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![("facing".to_string(), facing.to_string())],
+            ))
         }
 
         // Banner
@@ -287,9 +464,10 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
                 3 => "east",
                 _ => "north",
             };
-            Some(BlockState::new(get_legacy_type(id, 0)?, vec![
-                ("facing".to_string(), facing.to_string()),
-            ]))
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![("facing".to_string(), facing.to_string())],
+            ))
         }
 
         // Rails
@@ -305,9 +483,10 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
                 7 => "south_west",
                 _ => "north_south",
             };
-            Some(BlockState::new(get_legacy_type(id, 0)?, vec![
-                ("shape".to_string(), shape.to_string()),
-            ]))
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![("shape".to_string(), shape.to_string())],
+            ))
         }
 
         // End Portal Frames
@@ -320,18 +499,22 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
                 _ => "north",
             };
             let eye = data & 8 != 0;
-            Some(BlockState::new(get_legacy_type(id, 0)?, vec![
-                ("facing".to_string(), facing.to_string()),
-                ("eye".to_string(), eye.to_string()),
-            ]))
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![
+                    ("facing".to_string(), facing.to_string()),
+                    ("eye".to_string(), eye.to_string()),
+                ],
+            ))
         }
 
         // Redstone Wire
         55 => {
             let power = data & 15;
-            Some(BlockState::new(get_legacy_type(id, 0)?, vec![
-                ("power".to_string(), power.to_string()),
-            ]))
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![("power".to_string(), power.to_string())],
+            ))
         }
 
         // Repeater
@@ -345,22 +528,25 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
                 _ => "north",
             };
             let delay = ((data >> 2) & 3) + 1;
-            Some(BlockState::new(get_legacy_type(id, 0)?, vec![
-                ("facing".to_string(), facing.to_string()),
-                ("delay".to_string(), delay.to_string()),
-                ("powered".to_string(), powered.to_string()),
-            ]))
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![
+                    ("facing".to_string(), facing.to_string()),
+                    ("delay".to_string(), delay.to_string()),
+                    ("powered".to_string(), powered.to_string()),
+                ],
+            ))
         }
 
         18 => {
             /*
-              "18": "minecraft:oak_leaves",
-              "18:1": "minecraft:spruce_leaves",
-              "18:2": "minecraft:birch_leaves",
-              "18:3": "minecraft:jungle_leaves",
-              "18:4": "minecraft:acacia_leaves",
-              "18:5": "minecraft:dark_oak_leaves",
-             */
+             "18": "minecraft:oak_leaves",
+             "18:1": "minecraft:spruce_leaves",
+             "18:2": "minecraft:birch_leaves",
+             "18:3": "minecraft:jungle_leaves",
+             "18:4": "minecraft:acacia_leaves",
+             "18:5": "minecraft:dark_oak_leaves",
+            */
 
             let type_name = match (data & 3) % 4 {
                 0 => "oak",
@@ -373,10 +559,13 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
             };
             let decayable = data & 4 == 0;
             let check_decay = data & 8 == 0;
-            Some(BlockState::new(format!("minecraft:{}_leaves", type_name), vec![
-                ("decayable".to_string(), decayable.to_string()),
-                ("check_decay".to_string(), check_decay.to_string()),
-            ]))
+            Some(BlockState::new(
+                format!("minecraft:{}_leaves", type_name),
+                vec![
+                    ("decayable".to_string(), decayable.to_string()),
+                    ("check_decay".to_string(), check_decay.to_string()),
+                ],
+            ))
         }
 
         // Comparator
@@ -390,11 +579,14 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
                 _ => "north",
             };
             let mode = if data & 8 != 0 { "subtract" } else { "compare" };
-            Some(BlockState::new(get_legacy_type(id, 0)?, vec![
-                ("facing".to_string(), facing.to_string()),
-                ("mode".to_string(), mode.to_string()),
-                ("powered".to_string(), active.to_string()),
-            ]))
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![
+                    ("facing".to_string(), facing.to_string()),
+                    ("mode".to_string(), mode.to_string()),
+                    ("powered".to_string(), active.to_string()),
+                ],
+            ))
         }
 
         // Hopper
@@ -408,10 +600,13 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
                 _ => "down",
             };
             let enabled = data & 8 == 0;
-            Some(BlockState::new(get_legacy_type(id, 0)?, vec![
-                ("facing".to_string(), facing.to_string()),
-                ("enabled".to_string(), enabled.to_string()),
-            ]))
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![
+                    ("facing".to_string(), facing.to_string()),
+                    ("enabled".to_string(), enabled.to_string()),
+                ],
+            ))
         }
 
         // Glass Panes & Iron Bars
@@ -420,20 +615,24 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
             let east = data & 2 != 0;
             let south = data & 4 != 0;
             let west = data & 8 != 0;
-            Some(BlockState::new(get_legacy_type(id, 0)?, vec![
-                ("north".to_string(), north.to_string()),
-                ("east".to_string(), east.to_string()),
-                ("south".to_string(), south.to_string()),
-                ("west".to_string(), west.to_string()),
-            ]))
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![
+                    ("north".to_string(), north.to_string()),
+                    ("east".to_string(), east.to_string()),
+                    ("south".to_string(), south.to_string()),
+                    ("west".to_string(), west.to_string()),
+                ],
+            ))
         }
 
         // Cake
         92 => {
             let bites = data & 7;
-            Some(BlockState::new(get_legacy_type(id, 0)?, vec![
-                ("bites".to_string(), bites.to_string()),
-            ]))
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![("bites".to_string(), bites.to_string())],
+            ))
         }
 
         // Fence
@@ -442,12 +641,15 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
             let east = data & 2 != 0;
             let south = data & 4 != 0;
             let west = data & 8 != 0;
-            Some(BlockState::new(get_legacy_type(id, 0)?, vec![
-                ("north".to_string(), north.to_string()),
-                ("east".to_string(), east.to_string()),
-                ("south".to_string(), south.to_string()),
-                ("west".to_string(), west.to_string()),
-            ]))
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![
+                    ("north".to_string(), north.to_string()),
+                    ("east".to_string(), east.to_string()),
+                    ("south".to_string(), south.to_string()),
+                    ("west".to_string(), west.to_string()),
+                ],
+            ))
         }
 
         // Fence Gate
@@ -461,11 +663,14 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
             };
             let open = data & 4 != 0;
             let powered = data & 8 != 0;
-            Some(BlockState::new(get_legacy_type(id, 0)?, vec![
-                ("facing".to_string(), facing.to_string()),
-                ("open".to_string(), open.to_string()),
-                ("powered".to_string(), powered.to_string()),
-            ]))
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![
+                    ("facing".to_string(), facing.to_string()),
+                    ("open".to_string(), open.to_string()),
+                    ("powered".to_string(), powered.to_string()),
+                ],
+            ))
         }
 
         //
@@ -482,29 +687,75 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
             };
             let is_wall = data >= 1 && data <= 4;
             let block_type = match id {
-                50 => if is_wall { "minecraft:wall_torch" } else { "minecraft:torch" },
-                75 => if is_wall { "minecraft:redstone_wall_torch" } else { "minecraft:redstone_torch" },
-                76 => if is_wall { "minecraft:redstone_wall_torch" } else { "minecraft:redstone_torch" },
+                50 => {
+                    if is_wall {
+                        "minecraft:wall_torch"
+                    } else {
+                        "minecraft:torch"
+                    }
+                }
+                75 => {
+                    if is_wall {
+                        "minecraft:redstone_wall_torch"
+                    } else {
+                        "minecraft:redstone_torch"
+                    }
+                }
+                76 => {
+                    if is_wall {
+                        "minecraft:redstone_wall_torch"
+                    } else {
+                        "minecraft:redstone_torch"
+                    }
+                }
                 _ => return None,
             };
-            Some(BlockState::new(block_type.to_string(), vec![
-                ("facing".to_string(), facing.to_string()),
-                ("lit".to_string(), (id != 75).to_string()),
-            ]))
+            Some(BlockState::new(
+                block_type.to_string(),
+                vec![
+                    ("facing".to_string(), facing.to_string()),
+                    ("lit".to_string(), (id != 75).to_string()),
+                ],
+            ))
         }
-
-        // Logs (Old & New)
-        17 | 162 => {
+        17 => {
             let axis = match (data >> 2) & 3 {
                 0 => "y",
                 1 => "x",
                 2 => "z",
                 _ => "none",
             };
-            // Note: Must pass 'data' here to resolve wood variant (Oak/Birch/etc)
-            Some(BlockState::new(get_legacy_type(id, data)?, vec![
-                ("axis".to_string(), axis.to_string()),
-            ]))
+            let type_name = match data & 3 {
+                0 => "oak",
+                1 => "spruce",
+                2 => "birch",
+                3 => "jungle",
+                4 => "acacia",
+                5 => "dark_oak",
+                _ => "oak",
+            };
+            Some(BlockState::new(
+                format!("minecraft:{}_log", type_name),
+                vec![("axis".to_string(), axis.to_string())],
+            ))
+        }
+
+        162 => {
+            let axis = match (data >> 2) & 3 {
+                0 => "y",
+                1 => "x",
+                2 => "z",
+                _ => "none",
+            };
+            let type_name = match data & 3 {
+                0 => "acacia",
+                1 => "dark_oak",
+                _ => "acacia",
+            };
+            Some(BlockState::new(
+                format!("minecraft:{}_log", type_name),
+                vec![("axis".to_string(), axis.to_string())],
+            ))
         }
 
         // Trapdoors
@@ -518,11 +769,14 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
             };
             let half = if data & 4 != 0 { "top" } else { "bottom" };
             let open = data & 8 != 0;
-            Some(BlockState::new(get_legacy_type(id, 0)?, vec![
-                ("facing".to_string(), facing.to_string()),
-                ("half".to_string(), half.to_string()),
-                ("open".to_string(), open.to_string()),
-            ]))
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![
+                    ("facing".to_string(), facing.to_string()),
+                    ("half".to_string(), half.to_string()),
+                    ("open".to_string(), open.to_string()),
+                ],
+            ))
         }
 
         // Fences & Walls
@@ -531,12 +785,15 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
             let east = data & 2 != 0;
             let south = data & 4 != 0;
             let west = data & 8 != 0;
-            Some(BlockState::new(get_legacy_type(id, 0)?, vec![
-                ("north".to_string(), north.to_string()),
-                ("east".to_string(), east.to_string()),
-                ("south".to_string(), south.to_string()),
-                ("west".to_string(), west.to_string()),
-            ]))
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![
+                    ("north".to_string(), north.to_string()),
+                    ("east".to_string(), east.to_string()),
+                    ("south".to_string(), south.to_string()),
+                    ("west".to_string(), west.to_string()),
+                ],
+            ))
         }
 
         _ => {
