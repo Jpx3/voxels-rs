@@ -108,7 +108,7 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
         }
 
         // Wheat
-        59 => {
+        59 | 60 => {
             let age = data & 7;
             Some(BlockState::new(
                 get_legacy_type(id, 0)?,
@@ -279,7 +279,7 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
                 vec![],
             ))
         }
-        
+
         // Slabs
         44 => {
             let half = if data & 8 != 0 { "top" } else { "bottom" };
@@ -426,7 +426,7 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
         }
 
         // Directional Containers (Chests, Furnaces, Ladders, Wall Signs)
-        54 | 61 | 62 | 65 | 68 | 130 => {
+        54 | 61 | 62 | 65 | 68 | 130 | 146 => {
             let facing = match data {
                 2 => "north",
                 3 => "south",
@@ -471,7 +471,7 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
         }
 
         // Rails
-        66 => {
+        27 | 28 | 66 | 157 => {
             let shape = match data & 7 {
                 0 => "north_south",
                 1 => "east_west",
@@ -759,7 +759,7 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
         }
 
         // Trapdoors
-        96 | 107 => {
+        96 | 167 => {
             let facing = match data & 3 {
                 0 => "north",
                 1 => "south",
@@ -793,6 +793,53 @@ pub fn convert_legacy_data_to_modern_properties(id: usize, data: u8) -> Option<B
                     ("south".to_string(), south.to_string()),
                     ("west".to_string(), west.to_string()),
                 ],
+            ))
+        }
+
+        // Observer
+        218 => {
+            let facing = match data & 7 {
+                0 => "down",
+                1 => "up",
+                2 => "north",
+                3 => "south",
+                4 => "west",
+                5 => "east",
+                _ => "up",
+            };
+            let powered = data & 8 != 0;
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![
+                    ("facing".to_string(), facing.to_string()),
+                    ("powered".to_string(), powered.to_string()),
+                ],
+            ))
+        }
+
+        // Snow
+        78 => {
+            let layers = data & 7;
+            Some(BlockState::new(
+                "minecraft:snow".to_string(),
+                vec![("layers".to_string(), layers.to_string())],
+            ))
+        }
+
+        // End Rod
+        198 => {
+            let facing = match data & 7 {
+                0 => "down",
+                1 => "up",
+                2 => "north",
+                3 => "south",
+                4 => "west",
+                5 => "east",
+                _ => "up",
+            };
+            Some(BlockState::new(
+                get_legacy_type(id, 0)?,
+                vec![("facing".to_string(), facing.to_string())],
             ))
         }
 
